@@ -57,7 +57,7 @@ function NavBar() {
       <div className="flex w-full px-[1rem] justify-between items-center">
         <div className="flex items-center space-x-6">
           <div className="text-black font-semibold text-lg">COVE</div>
-          <button className="flex items-center space-x-1 text-blue-600 cursor-pointer rounded-full border-[.1rem] hover:bg-gray-100 hover:drop-shadow-sm hover:drop-shadow-gray-500 border-gray-300 py-2 px-4 transition-all">
+          <button onClick={()=> {navigate("/linkages")}} className="flex items-center space-x-1 text-blue-600 cursor-pointer rounded-full border-[.1rem] hover:bg-gray-100 hover:drop-shadow-sm hover:drop-shadow-gray-500 border-gray-300 py-2 px-4 transition-all">
             <Sparkles className="h-5" />
             <span className="text-sm font-medium">Linkages</span>
           </button>

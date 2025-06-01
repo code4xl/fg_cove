@@ -9,11 +9,15 @@ import Sidebar from './components/utils/Sidebar';
 import Dashboard from './components/protected/Dashboard/Dashboard';
 import ViewSheets from './components/protected/Views/Main';
 import PageNotFound from './components/common/PageNotFound';
+import Linkages from './components/protected/Linkages/Main';
+import SheetDisplay from './components/protected/Linkages/SheetDisplay';
+import { isDeatailSheetBar } from './app/LinkagesSlice';
 
 const RoutesConfig = () => {
   const isLoggedIn = useSelector(isUserLoggedIn);
   const ifDMenuState = useSelector(dashboardMenuState);
   const theme = useSelector(selectTheme);
+  const isDetailSheet = useSelector(isDeatailSheetBar);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -48,6 +52,7 @@ const RoutesConfig = () => {
       >
         {/*<Sidebar isOpen={ifDMenuState} />*/}
         <NavBar />
+        
         <div className={`${ifDMenuState && 'pl-[0rem]'}`}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
@@ -55,6 +60,7 @@ const RoutesConfig = () => {
             {/* <Route path="/dashboard" element={<Dashboard />} /> */}
             
             <Route path="/sheets" element={<ViewSheets />} />
+            <Route path="/linkages" element={<Linkages />} />
           </Routes>
           {/* <div className="bg-[var(--bg-secondary)] b-2 pr-2 text-sm pb-1 flex justify-end items-center">
             <p className="text-[var(--text-primary)]">
