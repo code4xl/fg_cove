@@ -8,12 +8,13 @@ import {
   useEdgesState,
 } from "@xyflow/react";
 import { CustomEdge, CustomNode, generateFlowElements } from "./utils/Helper";
-import ELK from 'elkjs/lib/elk.bundled.js';
-import { ReactFlowProvider, Panel, useReactFlow } from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
+import ELK from "elkjs/lib/elk.bundled.js";
+import { ReactFlowProvider, Panel, useReactFlow } from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
 import SheetDisplay from "./SheetDisplay";
 import { isDeatailSheetBar } from "../../../app/LinkagesSlice";
 import { useSelector } from "react-redux";
+import SheetDisplayNew from "../DetailLinkages/Main";
 
 // Sample metadata with proper linked-from structure
 const sampleMetadata = [
@@ -241,37 +242,40 @@ const elk = new ELK();
 
 const useLayoutedElements = () => {
   const { getNodes, setNodes, getEdges, fitView } = useReactFlow();
-  
+
   const defaultOptions = {
-    'elk.algorithm': 'layered',
-    'elk.layered.spacing.nodeNodeBetweenLayers': 150,
-    'elk.spacing.nodeNode': 100,
+    "elk.algorithm": "layered",
+    "elk.layered.spacing.nodeNodeBetweenLayers": 150,
+    "elk.spacing.nodeNode": 100,
   };
 
-  const getLayoutedElements = useCallback((options) => {
-    const layoutOptions = { ...defaultOptions, ...options };
-    const nodes = getNodes();
-    const edges = getEdges();
-    
-    const graph = {
-      id: 'root',
-      layoutOptions: layoutOptions,
-      children: nodes.map((node) => ({
-        ...node,
-        width: node.measured?.width || 300,
-        height: node.measured?.height || 200,
-      })),
-      edges: edges,
-    };
+  const getLayoutedElements = useCallback(
+    (options) => {
+      const layoutOptions = { ...defaultOptions, ...options };
+      const nodes = getNodes();
+      const edges = getEdges();
 
-    elk.layout(graph).then(({ children }) => {
-      children.forEach((node) => {
-        node.position = { x: node.x, y: node.y };
+      const graph = {
+        id: "root",
+        layoutOptions: layoutOptions,
+        children: nodes.map((node) => ({
+          ...node,
+          width: node.measured?.width || 300,
+          height: node.measured?.height || 200,
+        })),
+        edges: edges,
+      };
+
+      elk.layout(graph).then(({ children }) => {
+        children.forEach((node) => {
+          node.position = { x: node.x, y: node.y };
+        });
+        setNodes(children);
+        window.requestAnimationFrame(() => fitView());
       });
-      setNodes(children);
-      window.requestAnimationFrame(() => fitView());
-    });
-  }, [getNodes, getEdges, setNodes, fitView]);
+    },
+    [getNodes, getEdges, setNodes, fitView]
+  );
 
   return { getLayoutedElements };
 };
@@ -281,11 +285,11 @@ const LinkagesFlow = () => {
   const [metadata, setMetadata] = useState(sampleMetadata);
   const { getLayoutedElements } = useLayoutedElements();
   useEffect(() => {
-  getLayoutedElements({
-    'elk.algorithm': 'layered',
-    'elk.direction': 'RIGHT',
-  });
-}, [getLayoutedElements]);
+    getLayoutedElements({
+      "elk.algorithm": "layered",
+      "elk.direction": "RIGHT",
+    });
+  }, [getLayoutedElements]);
 
   const { nodes: initialNodes, edges: initialEdges } = useMemo(
     () => generateFlowElements(metadata),
@@ -321,7 +325,7 @@ const LinkagesFlow = () => {
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           fitView
-          fitViewOptions={{ padding: .5 }}
+          fitViewOptions={{ padding: 0.5 }}
           className="bg-gray-50 relative"
         >
           <Background variant="dots" gap={20} size={1} color="#000000" />
@@ -335,35 +339,43 @@ const LinkagesFlow = () => {
             <div className="flex flex-col gap-2">
               <button
                 className="bg-blue-600 text-white px-3 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors"
-                onClick={() => getLayoutedElements({
-                  'elk.algorithm': 'layered',
-                  'elk.direction': 'DOWN',
-                })}
+                onClick={() =>
+                  getLayoutedElements({
+                    "elk.algorithm": "layered",
+                    "elk.direction": "DOWN",
+                  })
+                }
               >
                 Vertical Layout
               </button>
               <button
                 className="bg-blue-600 text-white px-3 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors"
-                onClick={() => getLayoutedElements({
-                  'elk.algorithm': 'layered',
-                  'elk.direction': 'RIGHT',
-                })}
+                onClick={() =>
+                  getLayoutedElements({
+                    "elk.algorithm": "layered",
+                    "elk.direction": "RIGHT",
+                  })
+                }
               >
                 Horizontal Layout
               </button>
               <button
                 className="bg-green-600 text-white px-3 py-2 rounded-md text-sm hover:bg-green-700 transition-colors"
-                onClick={() => getLayoutedElements({
-                  'elk.algorithm': 'org.eclipse.elk.radial',
-                })}
+                onClick={() =>
+                  getLayoutedElements({
+                    "elk.algorithm": "org.eclipse.elk.radial",
+                  })
+                }
               >
                 Radial Layout
               </button>
               <button
                 className="bg-purple-600 text-white px-3 py-2 rounded-md text-sm hover:bg-purple-700 transition-colors"
-                onClick={() => getLayoutedElements({
-                  'elk.algorithm': 'org.eclipse.elk.force',
-                })}
+                onClick={() =>
+                  getLayoutedElements({
+                    "elk.algorithm": "org.eclipse.elk.force",
+                  })
+                }
               >
                 Force Layout
               </button>
@@ -376,14 +388,13 @@ const LinkagesFlow = () => {
 };
 
 const Linkages = () => {
-
   const isDetailSheet = useSelector(isDeatailSheetBar);
   return (
     <div className="w-full h-screen flex flex-col overflow-y-auto scrollbar-hide">
-        <ReactFlowProvider>
+      <ReactFlowProvider>
         <LinkagesFlow />
-        </ReactFlowProvider>
-        <SheetDisplay isOpen={isDetailSheet}/>
+      </ReactFlowProvider>
+      <SheetDisplayNew isOpen={isDetailSheet} />
     </div>
   );
 };

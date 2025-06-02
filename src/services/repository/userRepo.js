@@ -56,7 +56,7 @@ export function login(email_id, password, navigate) {
           uname: "Haresh Kurade",
           uemail: "kuradeharesh4002@gmail.com",
           role_id: 1,
-          role: "Worker"
+          role: "admin"
         }
         dispatch(setAccount(temp));
         dispatch(
