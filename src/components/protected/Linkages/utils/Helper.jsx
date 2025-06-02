@@ -316,6 +316,7 @@ export function generateAttributeFlowElements(attributes) {
               source: `attr-${sourceIndex}`,
               target: `attr-${targetIndex}`,
               type: "formulaEdge",
+              animated: true,
               data: {
                 operation: "addition",
                 sourceColumn: attributes[sourceIndex]?.name,
@@ -337,6 +338,7 @@ export function generateAttributeFlowElements(attributes) {
               source: `attr-${sourceIndex}`,
               target: `attr-${targetIndex}`,
               type: "formulaEdge",
+              animated: true,
               data: {
                 operation: "subtraction",
                 sourceColumn: attributes[sourceIndex]?.name,
@@ -362,6 +364,7 @@ export function generateAttributeFlowElements(attributes) {
           source: `attr-${refIndex}`,
           target: `attr-${targetIndex}`,
           type: "formulaEdge",
+          animated: true,
           data: {
             operation: "recurrent",
             sourceColumn: attributes[refIndex]?.name,
@@ -713,10 +716,11 @@ export const FormulaEdge = ({
       <BaseEdge
         id={id}
         path={edgePath}
+        animated={true}
         style={{
           stroke: edgeColor,
           strokeWidth,
-          strokeDasharray: operation === "subtraction" ? "8,4" : "none",
+          strokeDasharray: operation === "subtraction" ? "8,4" : operation === "addition" ? "9,4" : "none",
           ...style,
         }}
         markerEnd={`url(#arrow-${operation})`}
