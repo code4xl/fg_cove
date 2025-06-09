@@ -69,11 +69,11 @@ function NavBar() {
             <BarChart3 className="w-4 h-4 text-blue-500" />
             <span>Dashboard</span>
           </button>
-          <button className="bg-gray-100 border-[0.1rem] border-gray-300 rounded-full text-black px-3 py-1.5 hover:bg-white transition-all text-sm font-medium flex items-center space-x-1">
+          <button onClick={()=> {navigate("/user-control")}} className="bg-gray-100 border-[0.1rem] border-gray-300 rounded-full text-black px-3 py-1.5 hover:bg-white transition-all text-sm font-medium flex items-center space-x-1">
             <Users className="w-4 h-4 text-purple-500" />
             <span>Users</span>
           </button>
-          <button className="bg-gray-100 border-[0.1rem] border-gray-300 rounded-full text-black px-3 py-1.5 hover:bg-white transition-all text-sm font-medium flex items-center space-x-1">
+          <button onClick={()=> {navigate("/sheets")}} className="bg-gray-100 border-[0.1rem] border-gray-300 rounded-full text-black px-3 py-1.5 hover:bg-white transition-all text-sm font-medium flex items-center space-x-1">
             <FileSpreadsheet className="w-4 h-4 text-orange-500" />
             <span>Sheets</span>
           </button>

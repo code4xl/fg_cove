@@ -1,118 +1,128 @@
 //These repository files will be responsible for the flow of loaders and then sending the data to the connector along with the specific endpoint.
 //i.e frontend pages will call the functions from thsese repo and then pass data to this and this function will decide the further actions/
 //i.e enabling the loader, which endpoint should be called, after receiving the response what to do, toasting the required messages and at last defusing loaders.
-import { toast } from 'react-hot-toast';
-import { apiConnector } from '../Connector';
+import { toast } from "react-hot-toast";
+import { apiConnector } from "../Connector";
 import {
   setAccount,
   setAccountAfterRegister,
   setDFeature,
-} from '../../app/DashboardSlice';
-import { authEndpoints } from '../Apis';
-const { LOGIN_API, REGISTER, VALIDATE_GMAIL, GOOGLE_SIGN_IN } = authEndpoints;
+} from "../../app/DashboardSlice";
+import { authEndpoints, userEndpoints } from "../Apis";
+import { setMetadata } from "../../app/MetadataSlice";
+const { LOGIN_API, ADMIN_LOGIN_API } = authEndpoints;
+const { SELF_INFO_API } = userEndpoints;
 
-export function login(email_id, password, navigate) {
+export function login(email, password, login_role, navigate) {
   return async (dispatch) => {
-    const loadingToast = toast.loading('Letting you in...');
-    try {
-      const response = await apiConnector('POST', LOGIN_API, {
-        email_id,
-        password,
-      });
+    const loadingToast = toast.loading("Letting you in...");
 
-      console.log('Login API response : ', response);
-      if (response.data.success) {
-        toast.success('Login Successful..');
-        const temp = {
-          id: response.data.data.u_id,
-          uname: response.data.data.name,
-          uemail: response.data.data.email,
-          token: response.data.data.token,
-          role_id: response.data.data.role_id,
-          role: response.data.data.role,
-        };
-        dispatch(setAccount(temp));
-        // if (response.data.data.isNew) {
-        //   dispatch(
-        //     setDFeature({
-        //       dashboardFeature: 'Home',
-        //     }),
-        //   );
-        //   navigate('/dashboard');
-        // } else {
-        //   dispatch(
-        //     setDFeature({
-        //       dashboardFeature: 'Home',
-        //     }),
-        //   );
-        //   navigate('/dashboard');
-        // }
+    try {
+      const response =
+        login_role === "user"
+          ? await apiConnector("POST", LOGIN_API, { email, password })
+          : await apiConnector("POST", ADMIN_LOGIN_API, { email, password });
+
+      console.log("Login API response : ", response);
+      if (response.status === 200) {
+        toast.success(response.data.msg || "Login Successful!");
+
+        if (login_role === "user") {
+          // Handle user login flow
+          try {
+            const userInfoResponse = await apiConnector("GET", SELF_INFO_API);
+            console.log("User Info API response: ", userInfoResponse);
+
+            // Set user account info
+            const userAccount = {
+              id: userInfoResponse.data._id,
+              uname: userInfoResponse.data.name,
+              uemail: email, // Use email from login
+              userId: userInfoResponse.data.userId,
+              roleIdentifier: userInfoResponse.data.roleIdentifier,
+            };
+            dispatch(setAccount(userAccount));
+
+            // Set user metadata (allowedAccess)
+            dispatch(
+              setMetadata({ metadata: userInfoResponse.data.allowedAccess })
+            );
+          } catch (error) {
+            console.error("Error fetching user info: ", error);
+            toast.error("Failed to fetch user information.");
+            return;
+          }
+        } else {
+          // Handle admin login flow
+          try {
+            // Set admin account info from login response
+            const adminAccount = {
+              id: response.data.data.u_id,
+              uemail: email,
+              role: login_role,
+              roleIdentifier: "admin",
+            };
+            dispatch(setAccount(adminAccount));
+
+            // Fetch all metadata for admin
+            const metadataResponse = await apiConnector(
+              "GET",
+              FETCH_ALL_METAS_API
+            );
+            console.log("Metadata API response: ", metadataResponse);
+            dispatch(setMetadata({ metadata: metadataResponse.data }));
+          } catch (error) {
+            console.error("Error fetching admin metadata: ", error);
+            toast.error("Failed to fetch metadata.");
+            return;
+          }
+        }
+
+        // Navigate to appropriate dashboard
+        dispatch(setDFeature({ dashboardFeature: "Home" }));
+        navigate(login_role === "user" ? "/sheets" : "/sheets");
       } else {
-        throw new Error(response.data.message);
+        throw new Error(response.data.msg);
       }
     } catch (error) {
-      const temp = {
-          id: 1,
-          uname: "Haresh Kurade",
-          uemail: "kuradeharesh4002@gmail.com",
-          role_id: 1,
-          role: "admin"
-        }
-        dispatch(setAccount(temp));
-        dispatch(
-            setDFeature({
-              dashboardFeature: 'Home',
-            }),
-          );
-        navigate("/sheets");
-      console.log('Login API Error....', error);
-      console.log('Login API Error....', error.response?.data?.message);
+      console.log("Login API Error....", error);
+      console.log("Login API Error....", error.response?.data?.message);
 
-      toast.error(error.response?.data?.message);
+      // Development fallback (remove in production)
+      // const fallbackAccount = {
+      //   id: 1,
+      //   uname: "Haresh Kurade",
+      //   uemail: "kuradeharesh4002@gmail.com",
+      //   role_id: 1,
+      //   role: "admin",
+      //   roleIdentifier: "admin",
+      // };
+      // dispatch(setAccount(fallbackAccount));
+      // dispatch(setDFeature({ dashboardFeature: "Home" }));
+      // navigate("/sheets");
+
+      toast.error(
+        error.response?.data?.msg || "Login failed. Please try again."
+      );
     }
+
     toast.dismiss(loadingToast);
   };
 }
 
-export function authEmail(userId, otp, navigate) {
+export function register(name, email, password, mobile, navigate) {
   return async (dispatch) => {
-    const toastId = toast.loading('Validating OTP..');
+    const loadingToast = toast.loading("Registering you...");
     try {
-      const response = await apiConnector('POST', VALIDATE_GMAIL, {
-        userId,
-        otp,
-      });
-      console.log('Validate API response : ', response);
-      if (response.data.success) {
-        toast.success('Validation Successful..');
-        navigate('/login');
-        toast('Please Login...');
-        console.log(response);
-      } else {
-        toast.error(response.data.message);
-        throw new Error(response.data.message);
-      }
-    } catch (error) {
-      console.log('VALIDATION API Error....', error);
-      toast.error(error.response.data.message);
-    }
-    toast.dismiss(toastId);
-  };
-}
-
-export function register(name, email_id, password, mobile, navigate) {
-  return async (dispatch) => {
-    const loadingToast = toast.loading('Registering you...');
-    try {
-      const response = await apiConnector('POST', REGISTER, {
+      const response = await apiConnector("POST", REGISTER, {
         name,
         email_id,
         mobile,
         password,
       });
-      console.log('Register API response : ', response.data.data);
+      console.log("Register API response : ", response.data.data);
       if (response.data.success) {
-        toast.success('Registration Successful..');
+        toast.success("Registration Successful..");
         const temp = {
           id: response.data.data.u_id,
           uname: response.data.data.name,
@@ -120,74 +130,14 @@ export function register(name, email_id, password, mobile, navigate) {
         };
         console.log(temp);
         dispatch(setAccountAfterRegister(temp));
-        navigate('/verify-email');
+        navigate("/verify-email");
       } else {
         throw new Error(response.data.message);
       }
     } catch (error) {
-      console.log('Register API Error....', error);
+      console.log("Register API Error....", error);
       toast.error(error.response?.data?.message);
     }
-    toast.dismiss(loadingToast);
-  };
-}
-
-export function loginWithGoogle(credentialResponse, navigate) {
-  return async (dispatch) => {
-    const loadingToast = toast.loading('Signing in with Google...');
-    try {
-      const response = await apiConnector('POST', GOOGLE_SIGN_IN, {
-        credential: credentialResponse.credential,
-      });
-
-      console.log('Google Sign-In API response: ', response);
-
-      if (response.data.success) {
-        toast.success('Google Sign-In Successful!');
-
-        const temp = {
-          id: response.data.data.data.u_id,
-          uname: response.data.data.data.name,
-          uemail: response.data.data.data.email,
-          token: response.data.data.data.token,
-          is_new: response.data.data.data.isNew,
-        };
-        console.log(temp);
-
-        dispatch(setAccount(temp));
-
-        if (response.data.data.isNew) {
-          dispatch(
-            setDFeature({
-              dashboardFeature: 'Home',
-            }),
-          );
-          navigate('/dashboard');
-        } else {
-          dispatch(
-            setDFeature({
-              dashboardFeature: 'Home',
-            }),
-          );
-          navigate('/dashboard');
-        }
-      } else {
-        throw new Error(response.data.message || 'Sign-in failed');
-      }
-    } catch (error) {
-      console.log('Google Sign-In API Error:', error);
-      console.log(
-        'Google Sign-In API Error Details:',
-        error.response?.data?.message,
-      );
-
-      toast.error(
-        error.response?.data?.message ||
-          error.message ||
-          'Failed to sign in with Google',
-      );
-    }
-
     toast.dismiss(loadingToast);
   };
 }

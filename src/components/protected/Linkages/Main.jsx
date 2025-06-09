@@ -327,6 +327,13 @@ const LinkagesFlow = () => {
           fitView
           fitViewOptions={{ padding: 0.5 }}
           className="bg-gray-50 relative"
+          panOnDrag={false}
+          zoomOnScroll={false}
+          zoomOnPinch={false}
+          panOnScroll={false}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable={true}
         >
           <Background variant="dots" gap={20} size={1} color="#000000" />
           <Controls className="bg-white shadow-lg border" />

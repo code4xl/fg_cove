@@ -248,37 +248,37 @@ const SheetDisplayNew = ({ isOpen }) => {
         "object-id": "647f191e810c19729de860ea",
         "user-id": "07f1f77bcf86cd799439011",
         date: "2025-05-01T00:00:00Z",
-        attributes: ["1 Jun 2025", ],
+        attributes: ["1 Jun 2025", "2 Jun 2025", "3 Jun 2025" ],
       },
       {
         "object-id": "647f191e810c19729de860ea",
         "user-id": "07f1f77bcf86cd799439011",
         date: "2025-05-01T00:00:00Z",
-        attributes: [100],
+        attributes: [100, 100, 100],
       },
       {
         "object-id": "647f191e810c19729de860ea",
         "user-id": "07f1f77bcf86cd799439011",
         date: "2025-05-01T00:00:00Z",
-        attributes: [50],
+        attributes: [50, 50, 50],
       },
       {
         "object-id": "647f191e810c19729de860ea",
         "user-id": "07f1f77bcf86cd799439011",
         date: "2025-05-01T00:00:00Z",
-        attributes: [20],
+        attributes: [20, 20, 20],
       },
       {
         "object-id": "647f191e810c19729de860ea",
         "user-id": "07f1f77bcf86cd799439011",
         date: "2025-05-01T00:00:00Z",
-        attributes: [30],
+        attributes: [30, 30, 30],
       },
       {
         "object-id": "647f191e810c19729de860ea",
         "user-id": "07f1f77bcf86cd799439011",
         date: "2025-05-01T00:00:00Z",
-        attributes: [30],
+        attributes: [30, 30,  10],
       },
     ];
     return mockData;

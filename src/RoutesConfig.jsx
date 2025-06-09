@@ -8,10 +8,12 @@ import NavBar from './components/protected/Dashboard/NavBar';
 import Sidebar from './components/utils/Sidebar';
 import Dashboard from './components/protected/Dashboard/Dashboard';
 import ViewSheets from './components/protected/Views/Main';
+// import SheetDisplay from './components/protected/Linkages/SheetDisplay';
 import PageNotFound from './components/common/PageNotFound';
 import Linkages from './components/protected/Linkages/Main';
-import SheetDisplay from './components/protected/Linkages/SheetDisplay';
 import { isDeatailSheetBar } from './app/LinkagesSlice';
+import SheetManagement from './components/protected/Views/SheetViews';
+import UserControl from './components/protected/UserControl/Main';
 
 const RoutesConfig = () => {
   const isLoggedIn = useSelector(isUserLoggedIn);
@@ -59,8 +61,10 @@ const RoutesConfig = () => {
             <Route path="*" element={<PageNotFound />} />
             {/* <Route path="/dashboard" element={<Dashboard />} /> */}
             
-            <Route path="/sheets" element={<ViewSheets />} />
+            <Route path="/sheets-try" element={<ViewSheets />} />
             <Route path="/linkages" element={<Linkages />} />
+            <Route path="/sheets" element={<SheetManagement />} />
+            <Route path="/user-control" element={<UserControl />} />
           </Routes>
           {/* <div className="bg-[var(--bg-secondary)] b-2 pr-2 text-sm pb-1 flex justify-end items-center">
             <p className="text-[var(--text-primary)]">

@@ -938,13 +938,20 @@ export const AttributeFlowChart = ({
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView
-        fitViewOptions={{ padding: 0.2 }}
+        fitViewOptions={{ padding: 10 }}
         className="bg-gray-50"
+        panOnDrag={false}
+          zoomOnScroll={false}
+          zoomOnPinch={false}
+          panOnScroll={false}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable={false}
       >
         <Background variant="dots" gap={20} size={1} color="#e5e7eb" />
         <Controls
           className="bg-white shadow-lg border border-gray-200 rounded-lg"
-          showInteractive={false}
+          showInteractive={true}
         />
         <MiniMap
           className="bg-white shadow-lg border border-gray-200 rounded-lg"

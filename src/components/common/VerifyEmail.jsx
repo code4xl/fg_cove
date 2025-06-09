@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import OtpInput from 'react-otp-input';
 import { useNavigate } from 'react-router-dom';
 import { selectAccount } from '../../app/DashboardSlice';
-import { authEmail } from '../../services/repository/userRepo';
+// import { authEmail } from '../../services/repository/userRepo';
 import { useDispatch, useSelector } from 'react-redux';
 import { ArrowLeft, Timer } from 'lucide-react';
 
@@ -15,7 +15,7 @@ const VerifyEmail = () => {
   const dispatch = useDispatch();
   const handleVerifyAndSignup = (e) => {
     e.preventDefault();
-    dispatch(authEmail(acc.id, otp, navigate));
+    // dispatch(authEmail(acc.id, otp, navigate));
   };
   return (
     <>

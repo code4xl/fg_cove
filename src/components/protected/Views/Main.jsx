@@ -359,31 +359,31 @@ const sheetsData = {
       "object-id": "647f191e810c19729de860ea",
       "user-id": "07f1f77bcf86cd799439011",
       date: "2025-05-01T00:00:00Z",
-      attributes: [],
+      attributes: ["1 Jun 2025", "2 Jun 2025", ],
     },
     {
       "object-id": "647f191e810c19729de860ea",
       "user-id": "07f1f77bcf86cd799439011",
       date: "2025-05-01T00:00:00Z",
-      attributes: [],
+      attributes: [100, 100],
     },
     {
       "object-id": "647f191e810c19729de860ea",
       "user-id": "07f1f77bcf86cd799439011",
       date: "2025-05-01T00:00:00Z",
-      attributes: [],
+      attributes: [20, 20],
     },
     {
       "object-id": "647f191e810c19729de860ea",
       "user-id": "07f1f77bcf86cd799439011",
       date: "2025-05-01T00:00:00Z",
-      attributes: [],
+      attributes: [30, 30],
     },
     {
       "object-id": "647f191e810c19729de860ea",
       "user-id": "07f1f77bcf86cd799439011",
       date: "2025-05-01T00:00:00Z",
-      attributes: [], // calculated: production - raw-material-used - damaged
+      attributes: [10, 10], // calculated: production - raw-material-used - damaged
     },
   ],
 };
