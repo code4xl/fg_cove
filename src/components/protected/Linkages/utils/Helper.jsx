@@ -13,7 +13,7 @@ import {
   useNodesState,
   useEdgesState,
 } from "@xyflow/react";
-import ELK from 'elkjs/lib/elk.bundled.js';
+import ELK from "elkjs/lib/elk.bundled.js";
 
 import {
   ArrowLeft,
@@ -38,16 +38,28 @@ import {
 } from "../../../../app/LinkagesSlice";
 
 export function generateFlowElements(metadata) {
+  console.log("generateFlowElements called with:", metadata);
+
+  if (!metadata || !Array.isArray(metadata) || metadata.length === 0) {
+    console.log("No valid metadata provided");
+    return { nodes: [], edges: [] };
+  }
+
   const nodes = [];
   const edges = [];
-  const sheetMap = {}; // Map object-id → nodeId
-  const objectIdToSheet = {}; // For resolving linked-from targets
+  const sheetMap = {};
+  const objectIdToSheet = {};
 
-  // First pass: create node IDs and map object-ids
+  // First pass: create node IDs and map _ids
   metadata.forEach((sheet, index) => {
+    if (!sheet._id || !sheet.sheetName || !sheet.attributes) {
+      console.warn("Invalid sheet data:", sheet);
+      return;
+    }
+
     const nodeId = `sheet-${index}`;
-    sheetMap[sheet["object-id"]] = nodeId;
-    objectIdToSheet[sheet["object-id"]] = sheet;
+    sheetMap[sheet._id] = nodeId;
+    objectIdToSheet[sheet._id] = sheet;
 
     nodes.push({
       id: nodeId,
@@ -57,54 +69,100 @@ export function generateFlowElements(metadata) {
         y: 100 + Math.floor(index / 3) * 350,
       },
       data: {
-        sheetId: sheet["object-id"],
-        label: sheet["sheet-name"],
-        department: sheet.department,
-        modifiedBy: sheet["modified-by"],
-        lastModified: sheet["last-modified"],
+        sheetId: sheet._id,
+        label: sheet.sheetName,
         attributes: sheet.attributes,
       },
     });
   });
 
-  // Second pass: create edges based on 'linked-from'
-  metadata.forEach((sheet) => {
-    const targetId = sheetMap[sheet["object-id"]];
-    sheet.attributes.forEach((attr) => {
-      const link = attr["linked-from"];
-      if (link && link["sheet-object-id"] && link["attribute-indice"] != null) {
-        const sourceId = sheetMap[link["sheet-object-id"]];
-        const sourceSheet = objectIdToSheet[link["sheet-object-id"]];
-        const sourceAttr = sourceSheet?.attributes[link["attribute-indice"]];
+  // Second pass: create edges and collect all mappings between sheets
+  const sheetConnections = {}; // Track connections between sheets
 
-        if (sourceId && sourceAttr) {
-          edges.push({
-            id: `edge-${sourceId}-${targetId}-${attr.name}`,
-            source: sourceId,
-            target: targetId,
-            type: "customEdge",
-            data: {
-              sourceColumn: sourceAttr.name,
-              targetColumn: attr.name,
-              sourceSheet: sourceSheet["sheet-name"],
-              targetSheet: sheet["sheet-name"],
-            },
+  metadata.forEach((sheet) => {
+    if (!sheet._id || !sheet.attributes) return;
+
+    const targetId = sheetMap[sheet._id];
+
+    sheet.attributes.forEach((attr, attrIndex) => {
+      if (!attr || !attr.linkedFrom) return;
+
+      const link = attr.linkedFrom;
+      if (
+        link.sheetObjectId &&
+        link.attributeIndice !== null &&
+        link.attributeIndice !== undefined
+      ) {
+        const sourceId = sheetMap[link.sheetObjectId];
+        const sourceSheet = objectIdToSheet[link.sheetObjectId];
+        const sourceAttr = sourceSheet?.attributes?.[link.attributeIndice];
+
+        if (sourceId && sourceAttr && targetId) {
+          const connectionKey = `${sourceId}-${targetId}`;
+
+          // Initialize connection if it doesn't exist
+          if (!sheetConnections[connectionKey]) {
+            sheetConnections[connectionKey] = {
+              sourceId,
+              targetId,
+              sourceSheet: sourceSheet.sheetName,
+              targetSheet: sheet.sheetName,
+              sourceSheetId: link.sheetObjectId,
+              targetSheetId: sheet._id,
+              mappings: [],
+            };
+          }
+
+          // Add this mapping to the connection
+          sheetConnections[connectionKey].mappings.push({
+            sourceColumn: sourceAttr.name,
+            targetColumn: attr.name,
+            sourceAttrIndex: link.attributeIndice,
+            targetAttrIndex: attrIndex,
           });
         }
       }
     });
   });
 
-  console.log("Generated nodes:", nodes);
-  console.log("Generated edges:", edges);
+  // Create edges from sheet connections
+  Object.values(sheetConnections).forEach((connection, index) => {
+    const primaryMapping = connection.mappings[0];
+    const additionalMappings = connection.mappings.slice(1);
+
+    edges.push({
+      id: `edge-${connection.sourceId}-${connection.targetId}`,
+      source: connection.sourceId,
+      target: connection.targetId,
+      type: "customEdge",
+      data: {
+        sourceColumn: primaryMapping.sourceColumn,
+        targetColumn: primaryMapping.targetColumn,
+        sourceSheet: connection.sourceSheet,
+        targetSheet: connection.targetSheet,
+        sourceSheetId: connection.sourceSheetId,
+        targetSheetId: connection.targetSheetId,
+        sourceAttrIndex: primaryMapping.sourceAttrIndex,
+        targetAttrIndex: primaryMapping.targetAttrIndex,
+        additionalMappings: additionalMappings.map((mapping) => ({
+          source: mapping.sourceColumn,
+          target: mapping.targetColumn,
+        })),
+        totalMappings: connection.mappings.length,
+      },
+    });
+  });
+
+  console.log("Generated nodes:", nodes.length, nodes);
+  console.log("Generated edges:", edges.length, edges);
 
   return { nodes, edges };
 }
 
 export const CustomNode = ({ data }) => {
-  const { label, department, modifiedBy, lastModified, attributes, sheetId } =
-    data;
+  const { label, attributes, sheetId } = data;
   const dispatch = useDispatch();
+
   const handleNodeClick = (e) => {
     console.log("Node clicked:", e);
     dispatch(setSheetForDetail({ sheetForDetail: e }));
@@ -114,35 +172,33 @@ export const CustomNode = ({ data }) => {
   return (
     <div
       onClick={() => handleNodeClick(sheetId)}
-      className="min-w-72 z-30 bg-white border-2 border-gray-300 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+      className="min-w-72 max-h-72 z-30 bg-white border-2 border-gray-300 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
     >
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-t-xl">
         <h3 className="font-bold text-lg capitalize">
-          {label.replace(/-/g, " ")}
+          {label.replace(/_/g, " ")}
         </h3>
-        {/* <div className="flex justify-between items-center mt-2 text-sm opacity-90">
-          <span className="bg-blue-500 px-2 py-1 rounded-full text-xs">{department}</span>
-          <span className="text-xs">{modifiedBy}</span>
-        </div> */}
       </div>
 
       {/* Attributes */}
-      <div className="p-4 space-y-2 max-h-80 overflow-y-auto">
+      <div className="p-4 space-y-2 max-h-60 overflow-y-auto ">
         {attributes.map((attr, index) => (
           <div
             key={index}
             className={`px-2 py-1 rounded-lg border-l-4 transition-colors duration-200 ${
               attr.derived
                 ? "bg-purple-50 border-purple-400 hover:bg-purple-100"
-                : attr["linked-from"]
+                : attr.linkedFrom?.sheetObjectId
                 ? "bg-green-50 border-green-400 hover:bg-green-100"
+                : attr.recurrentCheck?.isRecurrent
+                ? "bg-amber-50 border-amber-400 hover:bg-amber-100"
                 : "bg-gray-50 border-gray-300 hover:bg-gray-100"
             }`}
           >
             <div className="flex items-center justify-between">
               <span className="font-medium text-gray-800 capitalize text-sm">
-                {attr.name.replace(/-/g, " ")}
+                {attr.name.replace(/_/g, " ")}
               </span>
               <div className="flex gap-1">
                 {attr.derived && (
@@ -150,9 +206,14 @@ export const CustomNode = ({ data }) => {
                     Derived
                   </span>
                 )}
-                {attr["linked-from"] && (
+                {attr.linkedFrom?.sheetObjectId && (
                   <span className="bg-green-200 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
                     Linked
+                  </span>
+                )}
+                {attr.recurrentCheck?.isRecurrent && (
+                  <span className="bg-amber-200 text-amber-800 px-2 py-1 rounded-full text-xs font-medium">
+                    Recurrent
                   </span>
                 )}
               </div>
@@ -186,13 +247,39 @@ export const CustomEdge = ({
 }) => {
   const { setEdges } = useReactFlow();
   const [showTooltip, setShowTooltip] = useState(false);
+  const [isClicked, setIsClicked] = useState(false);
 
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
+    sourcePosition: Position.Right,
     targetX,
     targetY,
+    targetPosition: Position.Left,
   });
+
+  // Handle click on the link button
+  const handleLinkClick = (e) => {
+    e.stopPropagation(); // Prevent event bubbling
+    setIsClicked(!isClicked);
+  };
+
+  // Handle clicks outside to hide the tooltip
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setIsClicked(false);
+    };
+
+    if (isClicked) {
+      document.addEventListener("click", handleClickOutside);
+      return () => {
+        document.removeEventListener("click", handleClickOutside);
+      };
+    }
+  }, [isClicked]);
+
+  // Show tooltip when hovering (only if not clicked) or when clicked
+  const shouldShowTooltip = (showTooltip && !isClicked) || isClicked;
 
   return (
     <>
@@ -211,51 +298,79 @@ export const CustomEdge = ({
           className="z-20 absolute translate-0.5"
         >
           <button
-            className="nodrag nopan bg-white border-2 border-blue-500 rounded-full p-1.5 hover:bg-blue-50 transition-colors duration-200 shadow-lg"
-            onMouseEnter={() => setShowTooltip(true)}
-            onMouseLeave={() => setShowTooltip(false)}
+            className={`nodrag nopan border-2 border-blue-500 rounded-full p-1.5 transition-all duration-200 shadow-lg ${
+              isClicked ? "bg-blue-500 scale-110" : "bg-white hover:bg-blue-50"
+            }`}
+            onMouseEnter={() => !isClicked && setShowTooltip(true)}
+            onMouseLeave={() => !isClicked && setShowTooltip(false)}
+            onClick={handleLinkClick}
           >
-            <Link size={14} className="text-blue-600" />
+            <Link
+              size={14}
+              className={isClicked ? "text-white" : "text-blue-600"}
+            />
           </button>
 
-          {showTooltip && data && (
+          {shouldShowTooltip && data && (
             <div
-              className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-blue-900 text-white px-2 py-2 rounded-lg shadow-lg text-sm min-w-80 z-0"
+              className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-blue-900 text-white px-2 py-2 rounded-lg shadow-lg text-sm min-w-64 max-w-80 z-0"
               style={{ pointerEvents: "none" }}
+              onClick={(e) => e.stopPropagation()} // Prevent clicks on tooltip from closing it
             >
-              {/* Header */}
-              <div className="flex justify-between items-center mb-1">
-                <div className="text-center flex-1">
-                  <div className=" px-2 py-1 rounded text-xs font-medium">
-                    {data.sourceSheet}
-                  </div>
+              {/* Sheet Names Header with count */}
+              <div className="flex justify-between items-center mb-2">
+                <div className="text-xs font-medium truncate flex-1">
+                  {data.sourceSheet?.replace(/_/g, " ")}
                 </div>
-                <div className="text-center flex-1">
-                  <div className=" px-2 py-1 rounded text-xs font-medium">
-                    {data.targetSheet}
-                  </div>
+                <div className="mx-1 flex items-center">
+                  <ArrowRight className="w-3 h-3 text-yellow-400" />
+                  {data.totalMappings > 1 && (
+                    <span className="ml-1 bg-yellow-500 text-blue-900 text-xs px-1 rounded-full font-bold">
+                      {data.totalMappings}
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs font-medium truncate flex-1">
+                  {data.targetSheet?.replace(/_/g, " ")}
                 </div>
               </div>
 
               {/* Divider */}
-              <div className="border-t border-blue-700 mb-1"></div>
+              <div className="border-t border-blue-700 mb-2"></div>
 
-              {/* Column relationships */}
-              <div className="space-y-2">
+              {/* Column mappings with scroll */}
+              <div className="max-h-32 overflow-y-auto space-y-1">
+                {/* Primary mapping */}
                 <div className="flex items-center justify-between">
-                  <span className="text-cyan-300">{data.sourceColumn}</span>
-                  <span className="text-yellow-400 mx-2">
-                    <ArrowRight className="w-4" />
+                  <span className="text-cyan-300 text-xs font-medium truncate">
+                    {data.sourceColumn?.replace(/_/g, " ")}
                   </span>
-                  <span className="text-cyan-300">{data.targetColumn}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-cyan-300">reciept-of-rm</span>
-                  <span className="text-yellow-400 mx-2">
-                    <ArrowLeft className="w-4" />
+                  <span className="text-yellow-400 mx-1">
+                    <ArrowRight className="w-3 h-3" />
                   </span>
-                  <span className="text-cyan-300">wastage</span>
+                  <span className="text-cyan-300 text-xs font-medium truncate">
+                    {data.targetColumn?.replace(/_/g, " ")}
+                  </span>
                 </div>
+
+                {/* Additional mappings */}
+                {data.additionalMappings &&
+                  data.additionalMappings.map((mapping, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between"
+                    >
+                      <span className="text-cyan-300 text-xs truncate">
+                        {mapping.source?.replace(/_/g, " ")}
+                      </span>
+                      <span className="text-yellow-400 mx-1">
+                        <ArrowRight className="w-3 h-3" />
+                      </span>
+                      <span className="text-cyan-300 text-xs truncate">
+                        {mapping.target?.replace(/_/g, " ")}
+                      </span>
+                    </div>
+                  ))}
               </div>
 
               {/* Tooltip arrow */}
@@ -288,17 +403,17 @@ export function generateAttributeFlowElements(attributes) {
       id: `attr-${index}`,
       type: "attributeNode",
       position: {
-        x: 100 + (index % 4) * 320, // Arrange in a grid
+        x: 100 + (index % 4) * 320,
         y: 100 + Math.floor(index / 4) * 200,
       },
       data: {
         name: attr.name,
         type: nodeType,
         derived: attr.derived,
-        linkedFrom: attr["linked-from"],
-        recurrentCheck: attr["recurrent-check"],
+        linkedFrom: attr.linkedFrom,
+        recurrentCheck: attr.recurrentCheck,
         formula: attr.formula,
-        value: generateSampleValue(attr, index), // Generate sample values for demo
+        value: generateSampleValue(attr, index),
         index: index,
       },
     });
@@ -308,8 +423,8 @@ export function generateAttributeFlowElements(attributes) {
   attributes.forEach((attr, targetIndex) => {
     if (attr.derived && attr.formula) {
       // Addition edges (green)
-      if (attr.formula["addition-indices"]) {
-        attr.formula["addition-indices"].forEach((sourceIndex) => {
+      if (attr.formula.additionIndices?.length > 0) {
+        attr.formula.additionIndices.forEach((sourceIndex) => {
           if (sourceIndex < attributes.length) {
             edges.push({
               id: `edge-add-${sourceIndex}-${targetIndex}`,
@@ -330,8 +445,8 @@ export function generateAttributeFlowElements(attributes) {
       }
 
       // Subtraction edges (red)
-      if (attr.formula["subtraction-indices"]) {
-        attr.formula["subtraction-indices"].forEach((sourceIndex) => {
+      if (attr.formula.subtractionIndices?.length > 0) {
+        attr.formula.subtractionIndices.forEach((sourceIndex) => {
           if (sourceIndex < attributes.length) {
             edges.push({
               id: `edge-sub-${sourceIndex}-${targetIndex}`,
@@ -354,10 +469,10 @@ export function generateAttributeFlowElements(attributes) {
 
     // Create edges for recurrent relationships
     if (
-      attr["recurrent-check"]?.["is-recurrent"] &&
-      attr["recurrent-check"]?.["recurrent-reference-indice"] !== null
+      attr.recurrentCheck?.isRecurrent &&
+      attr.recurrentCheck?.recurrentReferenceIndice !== null
     ) {
-      const refIndex = attr["recurrent-check"]["recurrent-reference-indice"];
+      const refIndex = attr.recurrentCheck.recurrentReferenceIndice;
       if (refIndex < attributes.length) {
         edges.push({
           id: `edge-recurrent-${refIndex}-${targetIndex}`,
@@ -377,9 +492,6 @@ export function generateAttributeFlowElements(attributes) {
     }
   });
 
-  console.log("Generated attribute nodes:", nodes);
-  console.log("Generated attribute edges:", edges);
-
   return { nodes, edges };
 }
 
@@ -387,10 +499,10 @@ export function determineNodeType(attr) {
   if (attr.derived) {
     return "derived";
   }
-  if (attr["linked-from"]) {
+  if (attr.linkedFrom?.sheetObjectId) {
     return "linked";
   }
-  if (attr["recurrent-check"]?.["is-recurrent"]) {
+  if (attr.recurrentCheck?.isRecurrent) {
     return "recurrent";
   }
   return "independent";
@@ -720,7 +832,12 @@ export const FormulaEdge = ({
         style={{
           stroke: edgeColor,
           strokeWidth,
-          strokeDasharray: operation === "subtraction" ? "8,4" : operation === "addition" ? "9,4" : "none",
+          strokeDasharray:
+            operation === "subtraction"
+              ? "8,4"
+              : operation === "addition"
+              ? "9,4"
+              : "none",
           ...style,
         }}
         markerEnd={`url(#arrow-${operation})`}
@@ -789,29 +906,36 @@ export const FormulaEdge = ({
 const elk = new ELK();
 const useLayoutedElements = () => {
   const { getNodes, setNodes, getEdges, fitView } = useReactFlow();
+
+  const defaultOptions = {
+    "elk.algorithm": "layered",
+    "elk.layered.spacing.nodeNodeBetweenLayers": 120,
+    "elk.spacing.nodeNode": 80,
+    "elk.direction": "DOWN",
+    "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
+  };
+
+  const useLayoutedElements = () => {
+  const { getNodes, setNodes, getEdges, setEdges, fitView } = useReactFlow();
   
   const defaultOptions = {
     'elk.algorithm': 'layered',
-    'elk.layered.spacing.nodeNodeBetweenLayers': 120,
-    'elk.spacing.nodeNode': 80,
-    'elk.direction': 'DOWN',
-    'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+    'elk.layered.spacing.nodeNodeBetweenLayers': 150,
+    'elk.spacing.nodeNode': 100,
   };
 
-  const getLayoutedElements = useCallback((options = {}) => {
+  const getLayoutedElements = useCallback((options) => {
     const layoutOptions = { ...defaultOptions, ...options };
     const nodes = getNodes();
     const edges = getEdges();
-    
-    if (nodes.length === 0) return;
     
     const graph = {
       id: 'root',
       layoutOptions: layoutOptions,
       children: nodes.map((node) => ({
         ...node,
-        width: node.measured?.width || 280,
-        height: node.measured?.height || 120,
+        width: node.measured?.width || 300,
+        height: node.measured?.height || 200,
       })),
       edges: edges,
     };
@@ -821,9 +945,17 @@ const useLayoutedElements = () => {
         node.position = { x: node.x, y: node.y };
       });
       setNodes(children);
-      setTimeout(() => fitView({ padding: 0.2 }), 100);
+      
+      // Force edge re-render after nodes are positioned
+      setTimeout(() => {
+        setEdges([...edges]);
+        fitView();
+      }, 50);
     });
-  }, [getNodes, getEdges, setNodes, fitView]);
+  }, [getNodes, getEdges, setNodes, setEdges, fitView]);
+
+  return { getLayoutedElements };
+};
 
   return { getLayoutedElements };
 };
@@ -838,13 +970,19 @@ export const AttributeFlowChart = ({ attributes, sheetName }) => {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
-  const nodeTypes = useMemo(() => ({
-    attributeNode: AttributeNode,
-  }), []);
+  const nodeTypes = useMemo(
+    () => ({
+      attributeNode: AttributeNode,
+    }),
+    []
+  );
 
-  const edgeTypes = useMemo(() => ({
-    formulaEdge: FormulaEdge,
-  }), []);
+  const edgeTypes = useMemo(
+    () => ({
+      formulaEdge: FormulaEdge,
+    }),
+    []
+  );
 
   useEffect(() => {
     if (nodes.length > 0) {
@@ -868,23 +1006,18 @@ export const AttributeFlowChart = ({ attributes, sheetName }) => {
         fitViewOptions={{ padding: 1.5 }}
         className="bg-gray-50"
       >
-        <Background 
-          variant="dots" 
-          gap={20} 
-          size={1} 
-          color="#e5e7eb" 
-        />
-        <Controls 
+        <Background variant="dots" gap={20} size={1} color="#e5e7eb" />
+        <Controls
           className="bg-white shadow-lg border border-gray-200 rounded-lg"
           showInteractive={false}
         />
         <MiniMap
           className="bg-white shadow-lg border border-gray-200 rounded-lg"
           nodeColor={(node) => {
-            if (node.data.type === 'derived') return '#8b5cf6';
-            if (node.data.type === 'linked') return '#10b981';
-            if (node.data.type === 'recurrent') return '#f59e0b';
-            return '#6b7280';
+            if (node.data.type === "derived") return "#8b5cf6";
+            if (node.data.type === "linked") return "#10b981";
+            if (node.data.type === "recurrent") return "#f59e0b";
+            return "#6b7280";
           }}
           maskColor="rgba(0, 0, 0, 0.1)"
         />

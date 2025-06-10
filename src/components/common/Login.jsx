@@ -1,20 +1,19 @@
-import React, { useState } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
-import { GoogleLogin } from '@react-oauth/google';
-import {
-  login,
-  register,
-} from '../../services/repository/userRepo';
+import React, { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useDispatch } from "react-redux";
+import { GoogleLogin } from "@react-oauth/google";
+import { login, register } from "../../services/repository/userRepo";
+
+import imgBg from "../../assets/userbg.jpg";
 
 const Login = () => {
   const [isLoginView, setIsLoginView] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [mobile, setMobile] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [mobile, setMobile] = useState("");
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
@@ -41,7 +40,15 @@ const Login = () => {
 
   return (
     //bg-gradient-to-br from-slate-50 to-blue-50
-    <div className="min-h-screen bg-transparent flex items-center justify-center p-4"> 
+    <div
+      className="min-h-screen flex items-center justify-center p-4"
+      style={{
+        backgroundImage: `url(${imgBg})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+      }}
+    >
       {/* Background decorations */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-20 w-32 h-32 bg-blue-200/30 rounded-full blur-xl"></div>
@@ -51,10 +58,10 @@ const Login = () => {
 
       <div className="relative w-full max-w-md">
         {/* Main Card */}
-        <div className="bg-white/80 backdrop-blur-md rounded-2xl shadow-2xl border border-white/20 p-8 relative overflow-hidden">
+        <div className="bg-white/30 backdrop-blur-md rounded-2xl shadow-2xl border border-white/20 p-8 relative overflow-hidden">
           {/* Card decoration */}
           <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/10 to-transparent rounded-full -translate-y-16 translate-x-16"></div>
-          
+
           {/* Logo */}
           <div className="flex justify-center mb-8 relative z-10">
             <div className="flex items-center space-x-3">
@@ -68,8 +75,12 @@ const Login = () => {
           {isLoginView ? (
             <div className="relative z-10">
               <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold text-slate-800 mb-2">Welcome Back</h2>
-                <p className="text-slate-600">Sign in to your account to continue</p>
+                <h2 className="text-3xl font-bold text-slate-800 mb-2">
+                  Welcome Back
+                </h2>
+                <p className="text-slate-600">
+                  Sign in to your account to continue
+                </p>
               </div>
 
               <form className="space-y-6" onSubmit={handleSubmit}>
@@ -100,7 +111,7 @@ const Login = () => {
                   </label>
                   <div className="relative">
                     <input
-                      type={showPassword ? 'text' : 'password'}
+                      type={showPassword ? "text" : "password"}
                       id="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
@@ -120,23 +131,12 @@ const Login = () => {
 
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
-                    <input
-                      id="remember-me"
-                      name="remember-me"
-                      type="checkbox"
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 rounded bg-slate-50"
-                    />
-                    <label
-                      htmlFor="remember-me"
-                      className="ml-2 block text-sm text-slate-700"
-                    >
-                      Remember me
-                    </label>
+                    <button onClick={()=> {navigate("/admin-login")}} className="text-sm font-semibold text-blue-800 hover:text-blue-700 transition-colors cursor-pointer"> Admin Login </button>
                   </div>
 
                   <a
                     href="#"
-                    className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
+                    className="text-sm font-semibold text-blue-800 hover:text-blue-700 transition-colors"
                   >
                     Forgot password?
                   </a>
@@ -314,13 +314,19 @@ const Login = () => {
             </div>
           )}
 
-          <p className="mt-8 text-xs text-center text-slate-500 relative z-10">
-            By continuing, you agree to our{' '}
-            <a href="#" className="text-blue-600 hover:text-blue-700 font-medium transition-colors">
+          <p className="mt-8 text-xs text-center text-gray-900 relative z-10">
+            By continuing, you agree to our{" "}
+            <a
+              href="#"
+              className="text-blue-600 hover:text-blue-700 font-medium transition-colors"
+            >
               Terms of Service
-            </a>{' '}
-            and{' '}
-            <a href="#" className="text-blue-600 hover:text-blue-700 font-medium transition-colors">
+            </a>{" "}
+            and{" "}
+            <a
+              href="#"
+              className="text-blue-600 hover:text-blue-700 font-medium transition-colors"
+            >
               Privacy Policy
             </a>
           </p>

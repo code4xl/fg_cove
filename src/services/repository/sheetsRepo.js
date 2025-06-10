@@ -160,7 +160,7 @@ export async function updateRowData(sheetId, data) {
     );
     console.log("Update Row Data API response: ", response);
 
-    if (response.status === 200) {
+    if (response.status === 201) {
       toast.success("Row data updated successfully!");
       return response.data;
     } else {

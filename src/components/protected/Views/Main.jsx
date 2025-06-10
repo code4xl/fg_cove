@@ -388,20 +388,6 @@ const SheetManagement = () => {
     return false;
   };
 
-  const convertDateFormat = (dateString, isInputToDisplay = true) => {
-    if (isInputToDisplay) {
-      const date = new Date(dateString);
-      return date.toLocaleDateString("en-GB", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      });
-    } else {
-      const date = new Date(dateString);
-      return date.toISOString().split("T")[0];
-    }
-  };
-
   const isCurrentMonthSheet = (sheet) => {
     if (!sheet || !sheet.attributes || sheet.attributes.length === 0)
       return false;
@@ -420,6 +406,22 @@ const SheetManagement = () => {
       latestDate.getFullYear() === currentYear
     );
   };
+
+  const convertDateFormat = (dateString, isInputToDisplay = true) => {
+    if (isInputToDisplay) {
+      const date = new Date(dateString);
+      return date.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+    } else {
+      const date = new Date(dateString);
+      return date.toISOString().split("T")[0];
+    }
+  };
+
+  
 
   useEffect(() => {
     // Check if data is loaded and we have a current sheet
@@ -1158,7 +1160,7 @@ const SheetManagement = () => {
     // Create rows by getting data from each attribute at the same index
     for (let rowIndex = 0; rowIndex < numRows; rowIndex++) {
       const row = currentSheet.attributes.map(
-        (attr) => attr.data[rowIndex] || ""
+        (attr) => attr.data[rowIndex] || "0"
       );
       rows.push(row);
     }
@@ -1287,9 +1289,9 @@ const SheetManagement = () => {
                           <div
                             className={`${
                               columnType === "derived" && !isBlankRow
-                                ? "bg-yellow-200 rounded-full px-3 py-1 inline-block"
+                                ? "bg-yellow-200 rounded-md px-3 py-1 inline-block"
                                 : columnType === "referenced" && !isBlankRow
-                                ? "bg-gray-200 rounded-full px-3 py-1 inline-block"
+                                ? "bg-gray-200 rounded-md px-3 py-1 inline-block"
                                 : ""
                             }`}
                           >
@@ -1418,14 +1420,14 @@ const SheetManagement = () => {
                   </label>
                   <input
                     type={
-                      isDateField && modalType === "update" ? "date" : "text"
+                      isDateField && modalType === "update" ? "text" : "text"
                     }
                     value={modalData[attr.name] || ""}
                     onChange={(e) =>
                       {if(!isDateField){handleInputChange(attr.name, e.target.value)}}
                     }
                     disabled={isDateField}
-                    placeholder={isDateField ? "" : `Enter ${attr.name}`}
+                    placeholder={isDateField ? `${attr.name}` : `Enter ${attr.name}`}
                     className={`w-full px-3 py-2 border border-gray-300 rounded-md text-sm ${
                       columnType === "derived"
                         ? "bg-yellow-50 border-yellow-300"
@@ -1521,13 +1523,13 @@ const SheetManagement = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-[calc(100vh-4rem)] bg-gray-100">
       <div className="flex">
         {/* Sidebar */}
         <div
           className={`${
             sidebarOpen ? "w-64" : "w-0"
-          } transition-all duration-300 bg-white border-r border-gray-200 overflow-hidden`}
+          } transition-all duration-300 min-h-[calc(100vh-4rem)] bg-white border-r border-gray-200 overflow-hidden`}
         >
           <div className="p-4">
             <div className="flex items-center justify-between mb-4">

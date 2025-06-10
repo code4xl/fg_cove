@@ -562,8 +562,8 @@ export function generateEnhancedAttributeFlowElements(
         name: attr.name,
         type: nodeType,
         derived: attr.derived,
-        linkedFrom: attr["linked-from"],
-        recurrentCheck: attr["recurrent-check"],
+        linkedFrom: attr.linkedFrom,
+        recurrentCheck: attr.recurrentCheck,
         formula: attr.formula,
         value: currentValue,
         index: index,
@@ -572,7 +572,6 @@ export function generateEnhancedAttributeFlowElements(
         todayColumnIndex,
         showTotals,
         onValueUpdate: (attrIndex, newValue) => {
-          // This will be passed from the parent component
           console.log(`Update attribute ${attrIndex} with value:`, newValue);
         },
       },
@@ -583,15 +582,15 @@ export function generateEnhancedAttributeFlowElements(
   attributes.forEach((attr, targetIndex) => {
     if (attr.derived && attr.formula) {
       // Addition edges (green)
-      if (attr.formula["addition-indices"]) {
-        attr.formula["addition-indices"].forEach((sourceIndex) => {
+      if (attr.formula.additionIndices && attr.formula.additionIndices.length > 0) {
+        attr.formula.additionIndices.forEach((sourceIndex) => {
           if (sourceIndex < attributes.length) {
             edges.push({
               id: `edge-add-${sourceIndex}-${targetIndex}`,
               source: `attr-${sourceIndex}`,
               target: `attr-${targetIndex}`,
               type: "formulaEdge",
-              animated: "true",
+              animated: true,
               data: {
                 operation: "addition",
                 sourceColumn: attributes[sourceIndex]?.name,
@@ -605,15 +604,15 @@ export function generateEnhancedAttributeFlowElements(
       }
 
       // Subtraction edges (red)
-      if (attr.formula["subtraction-indices"]) {
-        attr.formula["subtraction-indices"].forEach((sourceIndex) => {
+      if (attr.formula.subtractionIndices && attr.formula.subtractionIndices.length > 0) {
+        attr.formula.subtractionIndices.forEach((sourceIndex) => {
           if (sourceIndex < attributes.length) {
             edges.push({
               id: `edge-sub-${sourceIndex}-${targetIndex}`,
               source: `attr-${sourceIndex}`,
               target: `attr-${targetIndex}`,
               type: "formulaEdge",
-              animated: "true",
+              animated: true,
               data: {
                 operation: "subtraction",
                 sourceColumn: attributes[sourceIndex]?.name,
@@ -629,17 +628,17 @@ export function generateEnhancedAttributeFlowElements(
 
     // Create edges for recurrent relationships
     if (
-      attr["recurrent-check"]?.["is-recurrent"] &&
-      attr["recurrent-check"]?.["recurrent-reference-indice"] !== null
+      attr.recurrentCheck?.isRecurrent &&
+      attr.recurrentCheck?.recurrentReferenceIndice !== null
     ) {
-      const refIndex = attr["recurrent-check"]["recurrent-reference-indice"];
+      const refIndex = attr.recurrentCheck.recurrentReferenceIndice;
       if (refIndex < attributes.length) {
         edges.push({
           id: `edge-recurrent-${refIndex}-${targetIndex}`,
           source: `attr-${refIndex}`,
           target: `attr-${targetIndex}`,
           type: "formulaEdge",
-          animated: "true",
+          animated: true,
           data: {
             operation: "recurrent",
             sourceColumn: attributes[refIndex]?.name,
@@ -659,10 +658,10 @@ function determineNodeType(attr) {
   if (attr.derived) {
     return "derived";
   }
-  if (attr["linked-from"]) {
+  if (attr.linkedFrom?.sheetObjectId) { // Updated field name
     return "linked";
   }
-  if (attr["recurrent-check"]?.["is-recurrent"]) {
+  if (attr.recurrentCheck?.isRecurrent) { // Updated field name
     return "recurrent";
   }
   return "independent";

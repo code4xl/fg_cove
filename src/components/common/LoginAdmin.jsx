@@ -7,7 +7,7 @@ import {
   login,
   register,
 } from '../../services/repository/userRepo';
-
+import adminbg from "../../assets/adminbg.png";
 const LoginAdmin = () => {
   const [isLoginView, setIsLoginView] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
@@ -41,19 +41,24 @@ const LoginAdmin = () => {
 
   return (
     //bg-gradient-to-br from-slate-50 to-blue-50
-    <div className="min-h-screen bg-black flex items-center justify-center p-4"> 
+    <div className="min-h-screen flex items-center justify-center p-4" style={{
+    backgroundImage: `url(${adminbg})`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat'
+  }}> 
       {/* Background decorations */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-20 w-32 h-32 bg-blue-200/30 rounded-full blur-xl"></div>
-        <div className="absolute bottom-20 right-20 w-40 h-40 bg-indigo-200/30 rounded-full blur-xl"></div>
-        <div className="absolute top-1/2 left-10 w-20 h-20 bg-purple-200/30 rounded-full blur-lg"></div>
+        <div className="absolute top-20 left-20 w-32 h-32 bg-yellow-500/90 rounded-full blur-xl"></div>
+        <div className="absolute bottom-20 right-20 w-40 h-40 bg-pink-500/80 rounded-full blur-xl"></div>
+        <div className="absolute top-1/2 left-10 w-20 h-20 bg-purple-500/70 rounded-full blur-lg"></div>
       </div>
 
       <div className="relative w-full max-w-md">
         {/* Main Card */}
-        <div className="bg-white/20 backdrop-blur-md rounded-2xl shadow-2xl border border-white/20 p-8 relative overflow-hidden">
+        <div className="bg-black/30 backdrop-blur-md rounded-2xl shadow-2xl border border-white/20 p-8 relative overflow-hidden">
           {/* Card decoration */}
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/10 to-transparent rounded-full -translate-y-16 translate-x-16"></div>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-red-600/60 to-transparent rounded-full -translate-y-16 translate-x-16"></div>
           
           {/* Logo */}
           <div className="flex justify-center mb-8 relative z-10">
@@ -120,18 +125,7 @@ const LoginAdmin = () => {
 
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
-                    <input
-                      id="remember-me"
-                      name="remember-me"
-                      type="checkbox"
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 rounded bg-slate-50/40"
-                    />
-                    <label
-                      htmlFor="remember-me"
-                      className="ml-2 block text-sm text-slate-200"
-                    >
-                      Remember me
-                    </label>
+                    <button onClick={()=> {navigate("/login")}} className="text-sm font-semibold text-blue-800 hover:text-blue-700 transition-colors cursor-pointer"> Admin Login </button>
                   </div>
 
                   <a

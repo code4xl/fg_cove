@@ -15,6 +15,8 @@ import SheetDisplay from "./SheetDisplay";
 import { isDeatailSheetBar } from "../../../app/LinkagesSlice";
 import { useSelector } from "react-redux";
 import SheetDisplayNew from "../DetailLinkages/Main";
+import { fetchMetadata } from "../../../services/repository/sheetsRepo";
+import { selectAccount } from "../../../app/DashboardSlice";
 
 // Sample metadata with proper linked-from structure
 const sampleMetadata = [
@@ -282,19 +284,43 @@ const useLayoutedElements = () => {
 
 // Main Linkages Component
 const LinkagesFlow = () => {
-  const [metadata, setMetadata] = useState(sampleMetadata);
+  const [metadata, setMetadata] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [flowReady, setFlowReady] = useState(false);
   const { getLayoutedElements } = useLayoutedElements();
-  useEffect(() => {
-    getLayoutedElements({
-      "elk.algorithm": "layered",
-      "elk.direction": "RIGHT",
-    });
-  }, [getLayoutedElements]);
 
-  const { nodes: initialNodes, edges: initialEdges } = useMemo(
-    () => generateFlowElements(metadata),
-    [metadata]
-  );
+  // Fetch metadata on component mount
+  useEffect(() => {
+    const loadMetadata = async () => {
+      try {
+        setLoading(true);
+        setFlowReady(false);
+        const loginRole = "admin";
+        const fetchedMetadata = await fetchMetadata(loginRole);
+        console.log("Fetched metadata:", fetchedMetadata);
+        setMetadata(fetchedMetadata || []);
+
+        setTimeout(() => {
+          setFlowReady(true);
+        }, 100);
+      } catch (error) {
+        console.error("Error loading metadata:", error);
+        toast.error("Failed to load sheet data");
+        setMetadata([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadMetadata();
+  }, []);
+
+  const { nodes: initialNodes, edges: initialEdges } = useMemo(() => {
+    if (!flowReady || !metadata || metadata.length === 0) {
+      return { nodes: [], edges: [] };
+    }
+    return generateFlowElements(metadata);
+  }, [metadata, flowReady]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -313,9 +339,49 @@ const LinkagesFlow = () => {
     []
   );
 
+  // Apply layout when nodes are ready
+  useEffect(() => {
+    console.log("Nodes updated:", nodes.length, "edges:", edges.length);
+    if (nodes.length > 0) {
+      setTimeout(() => {
+        getLayoutedElements({
+          "elk.algorithm": "layered",
+          "elk.direction": "RIGHT",
+        });
+      }, 100);
+    }
+  }, [nodes.length, edges.length, getLayoutedElements]);
+
+  // Update nodes and edges when initialNodes/initialEdges change
+  useEffect(() => {
+    console.log(
+      "Initial nodes/edges updated:",
+      initialNodes.length,
+      initialEdges.length
+    );
+    setNodes(initialNodes);
+    setEdges(initialEdges);
+  }, [initialNodes, initialEdges, setNodes, setEdges]);
+
+  // Conditional rendering logic - but keep hooks above
+  if (loading) {
+    return (
+      <div className="h-screen w-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-600">Loading sheet data...</div>
+      </div>
+    );
+  }
+
+  if (!metadata || metadata.length === 0) {
+    return (
+      <div className="h-screen w-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-600">No sheet data available</div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen w-screen bg-gray-50">
-      {/* ReactFlow Canvas */}
       <div className="flex-1 h-[calc(100vh-2.8rem)]">
         <ReactFlow
           nodes={nodes}
@@ -334,6 +400,11 @@ const LinkagesFlow = () => {
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable={true}
+          defaultEdgeOptions={{
+            type: "customEdge",
+            animated: false,
+          }}
+          onInit={() => console.log("ReactFlow initialized")}
         >
           <Background variant="dots" gap={20} size={1} color="#000000" />
           <Controls className="bg-white shadow-lg border" />
