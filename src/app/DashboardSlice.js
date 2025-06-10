@@ -5,7 +5,7 @@ const theme = localStorage.getItem('theme') || 'light'; // Default to dark theme
 const initialState = {
   dashboardMenuState: true,
   dashboardFeature: Dstate ? Dstate : 'Home',
-  account: {"uname": "Haresh Kurade"},//localData ? localData : [],
+  account: localData ? localData : [],
   isLoggedIn: localData ? localData.isLoggedIn : false,
   profileData: [],
   theme: theme, // Add theme to state
@@ -35,6 +35,7 @@ const DashboardSlice = createSlice({
       localStorage.setItem('account', JSON.stringify(temp));
     },
     LogOut: (state, action) => {
+      localStorage.clear();
       state.account = [];
       state.profileData = [];
       state.isLoggedIn = false;
@@ -42,7 +43,6 @@ const DashboardSlice = createSlice({
       state.dashboardFeature = 'dashboard';
       state.theme = 'light'; // Reset to dark theme on logout
       localStorage.setItem('theme', 'light');
-      localStorage.clear();
     },
     setAccountAfterRegister: (state, action) => {
       state.account = action.payload;

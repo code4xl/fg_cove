@@ -24,6 +24,7 @@ import {
   BarChart3,
   FileSpreadsheet,
 } from "lucide-react";
+import { logoutFunction } from "../../../services/repository/userRepo";
 
 function NavBar() {
   const ifDMenuState = useSelector(dashboardMenuState);
@@ -48,8 +49,7 @@ function NavBar() {
   };
 
   const logout = () => {
-    dispatch(LogOut());
-    navigate("/");
+    dispatch(logoutFunction(user?.role, navigate))
   };
 
   return (
