@@ -4,14 +4,16 @@
 import { toast } from "react-hot-toast";
 import { apiConnector } from "../Connector";
 import {
+  LogOut,
   setAccount,
   setAccountAfterRegister,
   setDFeature,
 } from "../../app/DashboardSlice";
-import { authEndpoints, userEndpoints } from "../Apis";
+import { authEndpoints, userEndpoints, adminEndpoints } from "../Apis";
 import { setMetadata } from "../../app/MetadataSlice";
-const { LOGIN_API, ADMIN_LOGIN_API } = authEndpoints;
+const { LOGIN_API, ADMIN_LOGIN_API, LOGOUT_API, ADMIN_LOGOUT_API } = authEndpoints;
 const { SELF_INFO_API } = userEndpoints;
+const { FETCH_ALL_METAS_API } = adminEndpoints;
 
 export function login(email, password, login_role, navigate) {
   return async (dispatch) => {
@@ -39,6 +41,7 @@ export function login(email, password, login_role, navigate) {
               uname: userInfoResponse.data.name,
               uemail: email, // Use email from login
               userId: userInfoResponse.data.userId,
+              role: login_role,
               roleIdentifier: userInfoResponse.data.roleIdentifier,
             };
             dispatch(setAccount(userAccount));
@@ -57,7 +60,7 @@ export function login(email, password, login_role, navigate) {
           try {
             // Set admin account info from login response
             const adminAccount = {
-              id: response.data.data.u_id,
+              // id: response.data.data.u_id,
               uemail: email,
               role: login_role,
               roleIdentifier: "admin",
@@ -103,6 +106,46 @@ export function login(email, password, login_role, navigate) {
 
       toast.error(
         error.response?.data?.msg || "Login failed. Please try again."
+      );
+    }
+
+    toast.dismiss(loadingToast);
+  };
+}
+
+export function logoutFunction(login_role, navigate) {
+  return async (dispatch) => {
+    const loadingToast = toast.loading("Logging you out...");
+
+    try {
+      const response =
+        login_role === "user"
+          ? await apiConnector("POST", LOGOUT_API, {})
+          : await apiConnector("POST", ADMIN_LOGOUT_API, {});
+
+      console.log("Logout API response : ", response);
+      
+      if (response.status === 200) {
+        toast.success(response.data.msg || "Logout Successful!");
+
+        // Clear user/admin data from Redux store
+        dispatch(LogOut());
+
+        // Navigate to login page
+        navigate("/");
+      } else {
+        throw new Error(response.data.msg);
+      }
+    } catch (error) {
+      console.log("Logout API Error....", error);
+      console.log("Logout API Error....", error.response?.data?.message);
+
+      // Force logout even if API fails (optional)
+      navigate("/");
+
+      dispatch(LogOut())
+      toast.error(
+        error.response?.data?.msg || "Logout failed. Logged out locally."
       );
     }
 

@@ -13,7 +13,8 @@ import PageNotFound from './components/common/PageNotFound';
 import Linkages from './components/protected/Linkages/Main';
 import { isDeatailSheetBar } from './app/LinkagesSlice';
 import SheetManagement from './components/protected/Views/SheetViews';
-import UserControl from './components/protected/UserControl/Main';
+import UserControl from './components/protected/UserControl//UserControl';
+import LoginAdmin from './components/common/LoginAdmin';
 
 const RoutesConfig = () => {
   const isLoggedIn = useSelector(isUserLoggedIn);
@@ -40,6 +41,11 @@ const RoutesConfig = () => {
           element={[<Login />]}
         />
         <Route
+          path="/admin-login"
+          className="transition-all scrollbar-hide"
+          element={[<LoginAdmin />]}
+        />
+        <Route
           path="/verify-email"
           className="transition-all scrollbar-hide"
           element={[<VerifyEmail />]}
@@ -61,9 +67,9 @@ const RoutesConfig = () => {
             <Route path="*" element={<PageNotFound />} />
             {/* <Route path="/dashboard" element={<Dashboard />} /> */}
             
-            <Route path="/sheets-try" element={<ViewSheets />} />
+            <Route path="/sheets" element={<ViewSheets />} />
             <Route path="/linkages" element={<Linkages />} />
-            <Route path="/sheets" element={<SheetManagement />} />
+            <Route path="/sheets-try" element={<SheetManagement />} />
             <Route path="/user-control" element={<UserControl />} />
           </Routes>
           {/* <div className="bg-[var(--bg-secondary)] b-2 pr-2 text-sm pb-1 flex justify-end items-center">
