@@ -138,10 +138,15 @@ export const EnhancedAttributeNode = ({ data }) => {
     if (showTotals) {
       // Calculate and show column total
       if (sheetData && sheetData[index]) {
-        const total = sheetData[index].attributes.reduce((sum, val) => {
-          const numVal = parseFloat(val) || 0;
-          return sum + numVal;
-        }, 0);
+        let total;
+        if (name.toLowerCase().includes("date")) {
+          total = sheetData[index].attributes.filter((val) => !!val).length;
+        } else {
+          total = sheetData[index].attributes.reduce((sum, val) => {
+            const numVal = parseFloat(val) || 0;
+            return sum + numVal;
+          }, 0);
+        }
         return total.toLocaleString();
       }
       return "0";
@@ -539,7 +544,15 @@ export function generateEnhancedAttributeFlowElements(
 
     // Get today's value if available
     if (hasToday && todayColumnIndex >= 0 && sheetData[index]) {
-      currentValue = sheetData[index].attributes[todayColumnIndex];
+      if (attr.derived && attr.formula) {
+        currentValue = calculateDerivedValue(
+          attr.formula,
+          sheetData,
+          todayColumnIndex
+        );
+      } else {
+        currentValue = sheetData[index].attributes[todayColumnIndex];
+      }
     }
 
     // Calculate derived values
@@ -582,7 +595,10 @@ export function generateEnhancedAttributeFlowElements(
   attributes.forEach((attr, targetIndex) => {
     if (attr.derived && attr.formula) {
       // Addition edges (green)
-      if (attr.formula.additionIndices && attr.formula.additionIndices.length > 0) {
+      if (
+        attr.formula.additionIndices &&
+        attr.formula.additionIndices.length > 0
+      ) {
         attr.formula.additionIndices.forEach((sourceIndex) => {
           if (sourceIndex < attributes.length) {
             edges.push({
@@ -604,7 +620,10 @@ export function generateEnhancedAttributeFlowElements(
       }
 
       // Subtraction edges (red)
-      if (attr.formula.subtractionIndices && attr.formula.subtractionIndices.length > 0) {
+      if (
+        attr.formula.subtractionIndices &&
+        attr.formula.subtractionIndices.length > 0
+      ) {
         attr.formula.subtractionIndices.forEach((sourceIndex) => {
           if (sourceIndex < attributes.length) {
             edges.push({
@@ -658,10 +677,12 @@ function determineNodeType(attr) {
   if (attr.derived) {
     return "derived";
   }
-  if (attr.linkedFrom?.sheetObjectId) { // Updated field name
+  if (attr.linkedFrom?.sheetObjectId) {
+    // Updated field name
     return "linked";
   }
-  if (attr.recurrentCheck?.isRecurrent) { // Updated field name
+  if (attr.recurrentCheck?.isRecurrent) {
+    // Updated field name
     return "recurrent";
   }
   return "independent";
@@ -940,12 +961,12 @@ export const AttributeFlowChart = ({
         fitViewOptions={{ padding: 10 }}
         className="bg-gray-50"
         panOnDrag={false}
-          zoomOnScroll={false}
-          zoomOnPinch={false}
-          panOnScroll={false}
-          nodesDraggable={false}
-          nodesConnectable={false}
-          elementsSelectable={false}
+        zoomOnScroll={false}
+        zoomOnPinch={false}
+        panOnScroll={false}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        elementsSelectable={false}
       >
         <Background variant="dots" gap={20} size={1} color="#e5e7eb" />
         <Controls

@@ -212,9 +212,10 @@ const SheetDisplayNew = ({ isOpen }) => {
         if (response.status === 200) {
           toast.success("Node created successfully!");
           setShowNodeCreationModal(false);
+          window.location.reload();
 
           // Refresh the metadata and sheet data after successful update
-          await refreshSheetData();
+          // await refreshSheetData();
         } else {
           throw new Error("Failed to update metadata");
         }

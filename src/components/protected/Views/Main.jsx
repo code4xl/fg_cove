@@ -164,6 +164,7 @@ const SheetManagement = () => {
   const [editingSheetName, setEditingSheetName] = useState("");
 
   const handleSheetNameDoubleClick = () => {
+    console.log("name edit..");
     setIsEditingSheetName(true);
     setEditingSheetName(currentSheet?.sheetName || "");
   };
@@ -1289,9 +1290,9 @@ const SheetManagement = () => {
                           <div
                             className={`${
                               columnType === "derived" && !isBlankRow
-                                ? "bg-yellow-200 rounded-md px-3 py-1 inline-block"
+                                ? "bg-yellow-200 rounded-md px-3 py-1 w-full inline-block"
                                 : columnType === "referenced" && !isBlankRow
-                                ? "bg-gray-200 rounded-md px-3 py-1 inline-block"
+                                ? "bg-gray-200 rounded-md w-full px-3 py-1 inline-block"
                                 : ""
                             }`}
                           >
@@ -1649,7 +1650,7 @@ const SheetManagement = () => {
                             isAdmin && "hover:text-blue-600 cursor-pointer"
                           } transition-colors`}
                           onDoubleClick={() => {
-                            isAdmin && handleSheetNameDoubleClick;
+                            isAdmin && handleSheetNameDoubleClick();
                           }}
                           title={isAdmin ? "Double-click to edit" : null}
                         >

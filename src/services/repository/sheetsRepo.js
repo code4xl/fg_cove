@@ -133,7 +133,7 @@ export async function updateMetas(sheetId, data, action) {
 
     if (response.status === 200) {
       toast.success(config.successMessage);
-      return response.data;
+      return response;
     } else {
       toast.error(config.errorMessage);
     }
