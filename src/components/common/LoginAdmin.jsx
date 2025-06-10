@@ -73,7 +73,7 @@ const LoginAdmin = () => {
           {isLoginView ? (
             <div className="relative z-10">
               <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold text-slate-100 mb-2">Welcome Back</h2>
+                <h2 className="text-3xl font-bold text-slate-100 mb-2">Welcome Back Admin</h2>
                 <p className="text-slate-200">Sign in to your account to continue</p>
               </div>
 
@@ -125,7 +125,7 @@ const LoginAdmin = () => {
 
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
-                    <button onClick={()=> {navigate("/login")}} className="text-sm font-semibold text-blue-800 hover:text-blue-700 transition-colors cursor-pointer"> Admin Login </button>
+                    <button onClick={()=> {navigate("/login")}} className="text-sm font-semibold text-yellow-400 hover:text-yellow-300 transition-colors cursor-pointer"> User Login </button>
                   </div>
 
                   <a

@@ -76,7 +76,7 @@ export async function insertTodaysData(sheetId, data) {
     );
     console.log("Insert Today's Data API response: ", response);
 
-    if (response.status === 200) {
+    if (response.status === 201) {
       toast.success("Today's data inserted successfully!");
       return response.data; // Return the inserted data
     } else {
@@ -160,7 +160,7 @@ export async function updateRowData(sheetId, data) {
     );
     console.log("Update Row Data API response: ", response);
 
-    if (response.status === 201) {
+    if (response.status === 200) {
       toast.success("Row data updated successfully!");
       return response.data;
     } else {
