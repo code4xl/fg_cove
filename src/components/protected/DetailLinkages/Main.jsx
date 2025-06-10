@@ -1,14 +1,14 @@
 import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { X } from "lucide-react";
+import { RefreshCw, X } from "lucide-react";
 import { ReactFlowProvider } from "@xyflow/react";
 import {
   clearSheetData,
   detailSheetAttributes,
-  detailSheetBarToggle,
   isDeatailSheetBar,
   sheetForDetail,
   sheetNameForDetail,
+  setDetailSheetAttributes,
 } from "../../../app/LinkagesSlice.js";
 import { AttributeFlowChart } from "./utils/FlowElements.jsx";
 import {
@@ -17,8 +17,14 @@ import {
   getTodaysDate,
 } from "./utils/Helper.jsx";
 import { selectAccount } from "../../../app/DashboardSlice.js";
-
 import NodeCreationModal from "./utils/NodeCreationModal.jsx";
+import {
+  fetchMetadata,
+  getSheetsData,
+  insertTodaysData,
+  updateMetas,
+} from "../../../services/repository/sheetsRepo.js";
+import toast from "react-hot-toast";
 
 const SheetDisplayNew = ({ isOpen }) => {
   const dispatch = useDispatch();
@@ -31,265 +37,205 @@ const SheetDisplayNew = ({ isOpen }) => {
   const [sheetData, setSheetData] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
   const [pendingUpdates, setPendingUpdates] = useState({});
-
-  const isAdmin = useSelector(selectAccount)?.role === "admin";
   const [showNodeCreationModal, setShowNodeCreationModal] = useState(false);
-  const availableSheets = [
-    {
-      "object-id": "507f1f77bcf86cd799439012",
-      "sheet-name": "finished-goods",
-      department: "Production",
-      "last-modified": "2025-05-29T14:45:00Z",
-      "modified-by": "Sarah Wilson",
-      attributes: [
-        {
-          name: "date",
-          derived: false,
-          formula: null,
-          "linked-from": null,
-          "recurrent-check": {
-            "is-recurrent": false,
-            "recurrent-reference-indice": null,
-            "recurrence-fed-status": false,
-          },
-        },
-        {
-          name: "raw-material-used",
-          derived: false,
-          formula: null,
-          "linked-from": {
-            "sheet-object-id": "sheet-meta-1",
-            "attribute-indice": 3,
-          },
-          "recurrent-check": {
-            "is-recurrent": false,
-            "recurrent-reference-indice": null,
-            "recurrence-fed-status": false,
-          },
-        },
-        {
-          name: "production",
-          derived: false,
-          formula: null,
-          "linked-from": null,
-          "recurrent-check": {
-            "is-recurrent": false,
-            "recurrent-reference-indice": null,
-            "recurrence-fed-status": false,
-          },
-        },
-        {
-          name: "damaged",
-          derived: false,
-          formula: null,
-          "linked-from": null,
-          "recurrent-check": {
-            "is-recurrent": false,
-            "recurrent-reference-indice": null,
-            "recurrence-fed-status": false,
-          },
-        },
-        {
-          name: "available-stock",
-          derived: true,
-          formula: {
-            "addition-indices": [1],
-            "subtraction-indices": [0, 2],
-          },
-          "linked-from": null,
-          "recurrent-check": {
-            "is-recurrent": false,
-            "recurrent-reference-indice": null,
-            "recurrence-fed-status": false,
-          },
-        },
-      ],
-    },
-    {
-      "object-id": "507f1f77bcf86cd799439013",
-      "sheet-name": "unfinished-goods",
-      department: "Production",
-      "last-modified": "2025-05-29T14:45:00Z",
-      "modified-by": "Sarah Wilson",
-      attributes: [
-        {
-          name: "date",
-          derived: false,
-          formula: null,
-          "linked-from": null,
-          "recurrent-check": {
-            "is-recurrent": false,
-            "recurrent-reference-indice": null,
-            "recurrence-fed-status": false,
-          },
-        },
-        {
-          name: "raw-material-used",
-          derived: false,
-          formula: null,
-          "linked-from": {
-            "sheet-object-id": "sheet-meta-1",
-            "attribute-indice": 3,
-          },
-          "recurrent-check": {
-            "is-recurrent": false,
-            "recurrent-reference-indice": null,
-            "recurrence-fed-status": false,
-          },
-        },
-        {
-          name: "production",
-          derived: false,
-          formula: null,
-          "linked-from": null,
-          "recurrent-check": {
-            "is-recurrent": false,
-            "recurrent-reference-indice": null,
-            "recurrence-fed-status": false,
-          },
-        },
-        {
-          name: "damaged",
-          derived: false,
-          formula: null,
-          "linked-from": null,
-          "recurrent-check": {
-            "is-recurrent": false,
-            "recurrent-reference-indice": null,
-            "recurrence-fed-status": false,
-          },
-        },
-        {
-          name: "available-stock",
-          derived: true,
-          formula: {
-            "addition-indices": [1],
-            "subtraction-indices": [0, 2],
-          },
-          "linked-from": null,
-          "recurrent-check": {
-            "is-recurrent": false,
-            "recurrent-reference-indice": null,
-            "recurrence-fed-status": false,
-          },
-        },
-      ],
-    },
-  ];
+  const [availableMetadata, setAvailableMetadata] = useState([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const account = useSelector(selectAccount);
+  const isAdmin = account?.role === "admin";
+
   const handleCreateNode = useCallback(() => {
     setShowNodeCreationModal(true);
   }, []);
 
-  // Add this function to handle node save
-  const handleSaveNode = useCallback(
-    (nodeData) => {
-      // Create new attribute based on nodeData
-      const newAttribute = {
-        name: nodeData.name,
-        derived: nodeData.type === "derived",
-        formula:
-          nodeData.type === "derived"
-            ? {
-                "addition-indices": nodeData.additionIndices,
-                "subtraction-indices": nodeData.subtractionIndices,
-              }
-            : null,
-        "linked-from": nodeData.reference
-          ? {
-              "sheet-object-id": nodeData.reference.sheetId,
-              "attribute-indice": nodeData.reference.columnIndex,
+  // Fetch available sheets for references
+  useEffect(() => {
+    const fetchAvailableSheets = async () => {
+      try {
+        const loginRole = account?.role;
+        const metadata = await fetchMetadata(loginRole);
+        setAvailableMetadata(
+          metadata?.filter((sheet) => sheet._id !== sheetId) || []
+        );
+      } catch (error) {
+        console.error("Error fetching available sheets:", error);
+      }
+    };
+
+    if (isOpen && sheetId) {
+      fetchAvailableSheets();
+    }
+  }, [isOpen, sheetId, account?.role]);
+
+  // Fetch sheet data function
+  const fetchSheetData = useCallback(
+    async (sheetId) => {
+      try {
+        const currentYear = new Date().getFullYear();
+        const currentMonth = new Date().getMonth() + 1;
+
+        const apiData = await getSheetsData(
+          account?.role,
+          sheetId,
+          currentYear,
+          currentMonth
+        );
+        console.log("API Sheet Data:", apiData);
+
+        if (!apiData || apiData.length === 0) {
+          // Return empty data structure based on current attributes
+          const emptyData = sheetAttributes.map((attr, index) => ({
+            _id: `empty-${index}`,
+            attributes: [],
+          }));
+          return emptyData;
+        }
+
+        // Transform API data to match expected format
+        const transformedData = [];
+        const numAttributes = Math.max(
+          apiData[0]?.attributes?.length || 0,
+          sheetAttributes?.length || 0
+        );
+
+        // Create one row for each attribute
+        for (let attrIndex = 0; attrIndex < numAttributes; attrIndex++) {
+          const attributeRow = {
+            _id: `attr-${attrIndex}`,
+            attributes: [],
+          };
+
+          // Collect values for this attribute across all date entries
+          apiData.forEach((entry) => {
+            if (entry.attributes && entry.attributes[attrIndex] !== undefined) {
+              attributeRow.attributes.push(entry.attributes[attrIndex]);
             }
-          : null,
-        "recurrent-check": {
-          "is-recurrent": false,
-          "recurrent-reference-indice": null,
-          "recurrence-fed-status": false,
-        },
-      };
+          });
 
-      // Update metadata (you'll need to implement this based on your state management)
-      // This should update your metadata collection with the new attribute
-      const updatedAttributes = [...sheetAttributes, newAttribute];
+          transformedData.push(attributeRow);
+        }
 
-      // You'll need to dispatch this to your Redux store
-      // dispatch(updateSheetAttributes({ sheetId, attributes: updatedAttributes }));
-
-      // Add new empty data column to sheet data
-      const updatedSheetData = [...sheetData];
-      const numRows = updatedSheetData[0]?.attributes.length || 0;
-      const newDataRow = {
-        "object-id": "647f191e810c19729de860ea",
-        "user-id": "07f1f77bcf86cd799439011",
-        date: "2025-05-01T00:00:00Z",
-        attributes: new Array(numRows).fill(
-          nodeData.type === "derived" ? 0 : ""
-        ),
-      };
-
-      updatedSheetData.push(newDataRow);
-      setSheetData(updatedSheetData);
-
-      console.log("Created new node:", {
-        nodeData,
-        newAttribute,
-        updatedSheetData,
-      });
-
-      setShowNodeCreationModal(false);
+        console.log("Transformed Sheet Data:", transformedData);
+        return transformedData;
+      } catch (error) {
+        console.error("Error fetching sheet data:", error);
+        toast.error("Failed to fetch sheet data");
+        return [];
+      }
     },
-    [sheetAttributes, sheetData, sheetId]
+    [account?.role, sheetAttributes]
   );
 
-  const fetchSheetData = useCallback(async (sheetId) => {
-    // Replace this with your actual API call or Redux selector
-    // This should return data in the format you described
-    const mockData = [
-      {
-        "object-id": "647f191e810c19729de860ea",
-        "user-id": "07f1f77bcf86cd799439011",
-        date: "2025-05-01T00:00:00Z",
-        attributes: ["1 Jun 2025", "2 Jun 2025", "3 Jun 2025" ],
-      },
-      {
-        "object-id": "647f191e810c19729de860ea",
-        "user-id": "07f1f77bcf86cd799439011",
-        date: "2025-05-01T00:00:00Z",
-        attributes: [100, 100, 100],
-      },
-      {
-        "object-id": "647f191e810c19729de860ea",
-        "user-id": "07f1f77bcf86cd799439011",
-        date: "2025-05-01T00:00:00Z",
-        attributes: [50, 50, 50],
-      },
-      {
-        "object-id": "647f191e810c19729de860ea",
-        "user-id": "07f1f77bcf86cd799439011",
-        date: "2025-05-01T00:00:00Z",
-        attributes: [20, 20, 20],
-      },
-      {
-        "object-id": "647f191e810c19729de860ea",
-        "user-id": "07f1f77bcf86cd799439011",
-        date: "2025-05-01T00:00:00Z",
-        attributes: [30, 30, 30],
-      },
-      {
-        "object-id": "647f191e810c19729de860ea",
-        "user-id": "07f1f77bcf86cd799439011",
-        date: "2025-05-01T00:00:00Z",
-        attributes: [30, 30,  10],
-      },
-    ];
-    return mockData;
-  }, []);
+  // Refresh sheet data function
+  const refreshSheetData = useCallback(async () => {
+    try {
+      // Fetch updated metadata first
+      const loginRole = account?.role;
+      const updatedMetadata = await fetchMetadata(loginRole);
 
+      // Find the current sheet in updated metadata
+      const currentSheet = updatedMetadata.find(
+        (sheet) => sheet._id === sheetId
+      );
+
+      if (currentSheet) {
+        // Update Redux state with fresh attributes
+        dispatch(
+          setDetailSheetAttributes({
+            label: currentSheet.sheetName,
+            attributes: currentSheet.attributes,
+          })
+        );
+
+        // Fetch fresh sheet data
+        const freshSheetData = await fetchSheetData(sheetId);
+        setSheetData(freshSheetData);
+
+        console.log("Data refreshed successfully");
+      }
+    } catch (error) {
+      console.error("Error refreshing data:", error);
+      toast.error("Failed to refresh data");
+    }
+  }, [sheetId, account?.role, dispatch, fetchSheetData]);
+
+  // Handle node creation
+  const handleSaveNode = useCallback(
+    async (nodeData) => {
+      try {
+        setIsRefreshing(true);
+
+        // Create new attribute with exact metadata format
+        const newAttribute = {
+          formula:
+            nodeData.type === "derived"
+              ? {
+                  additionIndices: nodeData.additionIndices || [],
+                  subtractionIndices: nodeData.subtractionIndices || [],
+                }
+              : null,
+          linkedFrom: nodeData.reference
+            ? {
+                sheetObjectId: nodeData.reference.sheetId,
+                attributeIndice: nodeData.reference.columnIndex,
+              }
+            : {
+                sheetObjectId: null,
+                attributeIndice: null,
+              },
+          recurrentCheck: {
+            isRecurrent: false,
+            recurrentReferenceIndice: null,
+            recurrenceFedStatus: false,
+          },
+          name: nodeData.name,
+          derived: nodeData.type === "derived",
+        };
+
+        // Build the complete metadata object with new attribute appended
+        const updatedMetadata = {
+          _id: sheetId,
+          sheetName: sheetName,
+          attributes: [...sheetAttributes, newAttribute],
+          __v: 0,
+        };
+
+        console.log("Sending updated metadata to API:", updatedMetadata);
+
+        // Send entire metadata collection to API
+        const response = await updateMetas(
+          sheetId,
+          updatedMetadata,
+          "newColumn"
+        );
+
+        if (response.status === 200) {
+          toast.success("Node created successfully!");
+          setShowNodeCreationModal(false);
+
+          // Refresh the metadata and sheet data after successful update
+          await refreshSheetData();
+        } else {
+          throw new Error("Failed to update metadata");
+        }
+      } catch (error) {
+        console.error("Error creating node:", error);
+        toast.error("Failed to create node");
+      } finally {
+        setIsRefreshing(false);
+      }
+    },
+    [sheetAttributes, sheetId, sheetName, refreshSheetData]
+  );
+
+  // Load initial sheet data
   useEffect(() => {
     if (sheetId) {
       fetchSheetData(sheetId).then(setSheetData);
     }
   }, [sheetId, fetchSheetData]);
 
+  // Handle value updates
   const handleValueUpdate = useCallback((attributeIndex, newValue) => {
     setPendingUpdates((prev) => ({
       ...prev,
@@ -297,56 +243,70 @@ const SheetDisplayNew = ({ isOpen }) => {
     }));
   }, []);
 
-  //Saves Todays data..
+  // Save today's data
   const handleSaveData = useCallback(async () => {
     setIsSaving(true);
     try {
-      const updatedSheetData = [...sheetData];
       const today = getTodaysDate();
 
-      // Add today's date to date column if it doesn't exist
-      if (updatedSheetData[0]) {
-        updatedSheetData[0].attributes.push(today);
+      // Prepare data for API - collect all attribute values for today
+      const todayData = [];
+
+      // Add today's date as first attribute
+      todayData.push(today);
+
+      // Add values for each attribute (skip index 0 which is date)
+      for (let i = 1; i < sheetAttributes.length; i++) {
+        const attr = sheetAttributes[i];
+
+        if (attr.derived && attr.formula) {
+          // Calculate derived value based on the pending updates
+          let result = 0;
+
+          // Addition indices
+          if (attr.formula.additionIndices) {
+            attr.formula.additionIndices.forEach((index) => {
+              const value = pendingUpdates[index] || 0;
+              result += parseFloat(value) || 0;
+            });
+          }
+
+          // Subtraction indices
+          if (attr.formula.subtractionIndices) {
+            attr.formula.subtractionIndices.forEach((index) => {
+              const value = pendingUpdates[index] || 0;
+              result -= parseFloat(value) || 0;
+            });
+          }
+
+          todayData.push(result);
+        } else {
+          // Use pending update value or 0
+          const value = pendingUpdates[i];
+          todayData.push(value || 0);
+        }
       }
 
-      // Add values for each attribute
-      Object.entries(pendingUpdates).forEach(([attributeIndex, value]) => {
-        const index = parseInt(attributeIndex);
-        if (updatedSheetData[index]) {
-          updatedSheetData[index].attributes.push(value);
-        }
-      });
+      console.log("Saving today's data:", todayData);
 
-      // Calculate derived values
-      sheetAttributes.forEach((attr, index) => {
-        if (attr.derived && attr.formula) {
-          const newColumnIndex = updatedSheetData[0].attributes.length - 1;
-          const calculatedValue = calculateDerivedValue(
-            attr.formula,
-            updatedSheetData,
-            newColumnIndex
-          );
-          if (updatedSheetData[index]) {
-            updatedSheetData[index].attributes[newColumnIndex] =
-              calculatedValue;
-          }
-        }
-      });
+      // Save data via API
+      const saveResponse = await insertTodaysData(sheetId, todayData);
 
-      setSheetData(updatedSheetData);
-      setPendingUpdates({});
+      if (saveResponse) {
+        toast.success("Today's data saved successfully!");
 
-      // Here you would typically make an API call to save the data
-      console.log("Saving sheet data:", {
-        sheetId,
-        updatedData: updatedSheetData,
-      });
+        // Refresh data after save
+        const updatedData = await fetchSheetData(sheetId);
+        setSheetData(updatedData);
+        setPendingUpdates({});
+      }
     } catch (error) {
       console.error("Error saving data:", error);
+      toast.error("Failed to save data");
     } finally {
       setIsSaving(false);
     }
-  }, [sheetData, pendingUpdates, sheetAttributes, sheetId]);
+  }, [sheetId, pendingUpdates, sheetAttributes, fetchSheetData]);
 
   // Toggle totals view
   const handleToggleTotals = useCallback(() => {
@@ -361,13 +321,14 @@ const SheetDisplayNew = ({ isOpen }) => {
     }
   }, [sheetId, fetchSheetData]);
 
+  // Check if today's data exists
   const hasToday = useMemo(() => {
     return checkTodaysData(sheetData);
   }, [sheetData]);
 
+  // Close sidebar
   const onCloseBar = () => {
     dispatch(clearSheetData({}));
-    // dispatch(detailSheetBarToggle({ detailSheetBar: !isDetailSheet }));
   };
 
   return (
@@ -384,19 +345,19 @@ const SheetDisplayNew = ({ isOpen }) => {
     >
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-2 border-b border-gray-200 bg-gray-50">
-        <div className="flex  gap-2 items-center justify-center">
+        <div className="flex gap-2 items-center justify-center">
           <h2 className="text-2xl font-bold text-gray-900 capitalize">
-            {sheetName?.replace(/-/g, " ") || "Sheet Details"}
+            {sheetName?.replace(/_/g, " ") || "Sheet Details"}
           </h2>
-          <div className=" items-center justify-center flex gap-2 select-none">
+          <div className="items-center justify-center flex gap-2 select-none">
             <p
               className={`${
-                hasToday ? "bg-green-500 " : "bg-red-500"
+                hasToday ? "bg-green-500" : "bg-red-500"
               } text-white rounded-full text-sm font-bold px-2 py-1 mt-1`}
             >
               {hasToday ? "Today's data available" : "Enter today's data"}
             </p>
-            <p> Sheet View</p>
+            <p>Sheet View</p>
           </div>
         </div>
         <button
@@ -408,7 +369,7 @@ const SheetDisplayNew = ({ isOpen }) => {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden relative">
         {sheetAttributes && sheetAttributes.length > 0 ? (
           <>
             <ReactFlowProvider>
@@ -426,15 +387,27 @@ const SheetDisplayNew = ({ isOpen }) => {
                 onCreateNode={handleCreateNode}
               />
             </ReactFlowProvider>
+
+            {/* Node Creation Modal */}
             {showNodeCreationModal && (
               <NodeCreationModal
                 isOpen={showNodeCreationModal}
                 onClose={() => setShowNodeCreationModal(false)}
                 onSave={handleSaveNode}
                 attributes={sheetAttributes}
-                availableSheets={availableSheets}
+                availableSheets={availableMetadata}
               />
-            )}{" "}
+            )}
+
+            {/* Loading Overlay */}
+            {isRefreshing && (
+              <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-50">
+                <div className="flex flex-col items-center gap-3">
+                  <RefreshCw className="w-8 h-8 animate-spin text-blue-600" />
+                  <p className="text-sm text-gray-600">Creating node...</p>
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <div className="flex items-center justify-center h-full">
