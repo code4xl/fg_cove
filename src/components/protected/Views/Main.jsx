@@ -838,6 +838,55 @@ const SheetManagement = () => {
   const handleModalSubmit = async () => {
     let updatedSheet = { ...currentSheet };
 
+    const validationErrors = [];
+
+    Object.keys(modalData).forEach((fieldName) => {
+      const value = modalData[fieldName];
+      const attribute = currentSheet.attributes.find(
+        (attr) => attr.name === fieldName
+      );
+
+      if (!attribute) return;
+
+      const columnType = getColumnType(attribute);
+      const isDateField =
+        fieldName.toLowerCase() === "date" ||
+        currentSheet.attributes.indexOf(attribute) === 0;
+      const isDepartmentField = fieldName.toLowerCase().includes("department");
+
+      // Skip validation for special fields
+      if (
+        columnType === "derived" ||
+        columnType === "referenced" ||
+        columnType === "recurrent" ||
+        isDateField
+      ) {
+        return;
+      }
+
+      // Validate department fields
+      if (isDepartmentField) {
+        const stringRegex = /^[a-zA-Z\s\-\.,']+$/;
+        if (value && !stringRegex.test(value)) {
+          validationErrors.push(
+            `${fieldName}: Only letters and basic punctuation allowed`
+          );
+        }
+      } else {
+        // Validate number fields
+        const numberRegex = /^-?\d*\.?\d*$/;
+        if (value && !numberRegex.test(value)) {
+          validationErrors.push(`${fieldName}: Only numeric values allowed`);
+        }
+      }
+    });
+
+    // Show validation errors if any
+    if (validationErrors.length > 0) {
+      toast.error(`Validation errors:\n${validationErrors.join("\n")}`);
+      return;
+    }
+
     if (modalType === "insert") {
       // Create new insert array with same length as attributes, initially filled with 0
       const newInsertArray = new Array(currentSheet.attributes.length).fill(0);
@@ -1010,18 +1059,58 @@ const SheetManagement = () => {
   };
 
   const handleInputChange = (fieldName, value) => {
-    setModalData((prev) => {
-      const isDateField = fieldName.toLowerCase() === "date";
-      const processedValue =
-        isDateField && modalType === "update"
-          ? convertDateFormat(value, true)
-          : value;
+    // Find the attribute to check its type
+    const attribute = currentSheet.attributes.find(
+      (attr) => attr.name === fieldName
+    );
 
-      return {
+    // Check if this is a department field (should only allow strings)
+    const isDepartmentField = fieldName.toLowerCase().includes("department");
+
+    // Check if this is a date field or derived field
+    const isDateField =
+      fieldName.toLowerCase() === "date" ||
+      (attribute && currentSheet.attributes.indexOf(attribute) === 0);
+    const isDerivedField = attribute?.derived;
+    const isReferencedField = attribute?.linkedFrom?.sheetObjectId;
+    const isRecurrentField = attribute?.recurrentCheck?.isRecurrent;
+
+    // Skip validation for special fields
+    if (
+      isDateField ||
+      isDerivedField ||
+      isReferencedField ||
+      isRecurrentField
+    ) {
+      setModalData((prev) => ({
         ...prev,
-        [fieldName]: processedValue,
-      };
-    });
+        [fieldName]: value,
+      }));
+      return;
+    }
+
+    // Validate input based on field type
+    if (isDepartmentField) {
+      // For department fields, only allow letters, spaces, and common punctuation
+      const stringRegex = /^[a-zA-Z\s\-\.,']*$/;
+      if (value === "" || stringRegex.test(value)) {
+        setModalData((prev) => ({
+          ...prev,
+          [fieldName]: value,
+        }));
+      }
+      // If invalid, don't update the value (ignore the input)
+    } else {
+      // For non-department fields, only allow numbers (including decimals)
+      const numberRegex = /^-?\d*\.?\d*$/;
+      if (value === "" || numberRegex.test(value)) {
+        setModalData((prev) => ({
+          ...prev,
+          [fieldName]: value,
+        }));
+      }
+      // If invalid, don't update the value (ignore the input)
+    }
   };
 
   const handleSaveColumnNew = async (columnData) => {
@@ -1768,12 +1857,18 @@ const SheetManagement = () => {
               const isDisabled =
                 columnType === "derived" ||
                 columnType === "referenced" ||
-                columnType === "recurrent"; // Add recurrent to disabled columns
+                columnType === "recurrent";
               const isDateField =
                 attr.name.toLowerCase() === "date" || index === 0;
               const shouldDisableDateInInsert =
                 modalType === "insert" && isDateField;
               const finalDisabled = isDisabled || shouldDisableDateInInsert;
+
+              // Determine input type based on field name
+              const isDepartmentField = attr.name
+                .toLowerCase()
+                .includes("department");
+              const inputType = isDepartmentField ? "text" : "number";
 
               return (
                 <div key={index} className="space-y-1">
@@ -1783,18 +1878,20 @@ const SheetManagement = () => {
                       .replace(/\b\w/g, (l) => l.toUpperCase())}
                     {columnType === "derived" && " ⭐"}
                     {columnType === "referenced" && " 🔗"}
-                    {columnType === "recurrent" && " 🔄"}{" "}
-                    {/* Add recurrent indicator */}
+                    {columnType === "recurrent" && " 🔄"}
                     {shouldDisableDateInInsert && " 📅"}
+                    {isDepartmentField && " 📝"} {/* Add text indicator */}
+                    {!isDepartmentField &&
+                      !isDateField &&
+                      !isDisabled &&
+                      " 🔢"}{" "}
+                    {/* Add number indicator */}
                   </label>
                   <input
-                    type="text"
+                    type={finalDisabled || isDateField ? "text" : inputType}
                     value={modalData[attr.name] || ""}
                     onChange={(e) => {
-                      if (
-                        !(isDateField && modalType === "insert") &&
-                        !isDisabled
-                      ) {
+                      if (!finalDisabled) {
                         handleInputChange(attr.name, e.target.value);
                       }
                     }}
@@ -1806,8 +1903,21 @@ const SheetManagement = () => {
                           : `${attr.name}`
                         : columnType === "recurrent"
                         ? "Auto-calculated from previous period"
-                        : `Enter ${attr.name}`
+                        : columnType === "derived"
+                        ? "Auto-calculated"
+                        : columnType === "referenced"
+                        ? "Referenced from another sheet"
+                        : isDepartmentField
+                        ? "Enter text (letters only)"
+                        : "Enter number"
                     }
+                    // Add step and min attributes for number inputs
+                    {...(!isDepartmentField &&
+                      !isDateField &&
+                      !finalDisabled && {
+                        step: "any",
+                        min: undefined, // Allow negative numbers
+                      })}
                     className={`w-full px-3 py-2 border border-gray-300 rounded-md text-sm ${
                       columnType === "derived"
                         ? "bg-yellow-50 border-yellow-300"
@@ -1817,7 +1927,9 @@ const SheetManagement = () => {
                         ? "bg-purple-50 border-purple-300 opacity-60"
                         : shouldDisableDateInInsert
                         ? "bg-gray-50 border-gray-300"
-                        : "bg-white"
+                        : isDepartmentField
+                        ? "bg-green-50 border-green-300"
+                        : "bg-blue-50 border-blue-300"
                     } ${finalDisabled ? "cursor-not-allowed opacity-75" : ""}`}
                   />
                   {columnType === "derived" && attr.humanFormula && (
@@ -1833,6 +1945,17 @@ const SheetManagement = () => {
                       ]?.name
                         ?.replace(/-/g, " ")
                         ?.replace(/\b\w/g, (l) => l.toUpperCase()) || "Unknown"}
+                    </div>
+                  )}
+                  {isDepartmentField && (
+                    <div className="text-xs text-green-600">
+                      Text field - Only letters, spaces, and basic punctuation
+                      allowed
+                    </div>
+                  )}
+                  {!isDepartmentField && !isDateField && !isDisabled && (
+                    <div className="text-xs text-blue-600">
+                      Number field - Only numeric values allowed
                     </div>
                   )}
                 </div>
@@ -1965,9 +2088,9 @@ const SheetManagement = () => {
                     onClick={() => {
                       setSelectedSheetId(sheet["_id"]);
                       // Fetch data if not already cached
-                      if (!rawSheetsData[sheet["_id"]]) {
-                        fetchSheetData(sheet["_id"]);
-                      }
+                      // if (!rawSheetsData[sheet["_id"]]) {
+                      //   fetchSheetData(sheet["_id"]);
+                      // }
                     }}
                     className={`w-full text-left px-3 py-2 rounded-md text-sm ${
                       selectedSheetId === sheet["_id"]
@@ -2101,11 +2224,13 @@ const SheetManagement = () => {
                       </button>
                       {isAdmin && (
                         <button
-                        onClick={() => {navigate("/create-sheet")}}
-                        className="bg-green-700 text-white px-4 py-1.5 rounded-md text-sm hover:bg-green-600 transition-all"
-                      >
-                        New Sheet
-                      </button>
+                          onClick={() => {
+                            navigate("/create-sheet");
+                          }}
+                          className="bg-green-700 text-white px-4 py-1.5 rounded-md text-sm hover:bg-green-600 transition-all"
+                        >
+                          New Sheet
+                        </button>
                       )}
                     </div>
                   </div>
