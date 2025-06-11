@@ -916,46 +916,49 @@ const useLayoutedElements = () => {
   };
 
   const useLayoutedElements = () => {
-  const { getNodes, setNodes, getEdges, setEdges, fitView } = useReactFlow();
-  
-  const defaultOptions = {
-    'elk.algorithm': 'layered',
-    'elk.layered.spacing.nodeNodeBetweenLayers': 150,
-    'elk.spacing.nodeNode': 100,
-  };
+    const { getNodes, setNodes, getEdges, setEdges, fitView } = useReactFlow();
 
-  const getLayoutedElements = useCallback((options) => {
-    const layoutOptions = { ...defaultOptions, ...options };
-    const nodes = getNodes();
-    const edges = getEdges();
-    
-    const graph = {
-      id: 'root',
-      layoutOptions: layoutOptions,
-      children: nodes.map((node) => ({
-        ...node,
-        width: node.measured?.width || 300,
-        height: node.measured?.height || 200,
-      })),
-      edges: edges,
+    const defaultOptions = {
+      "elk.algorithm": "layered",
+      "elk.layered.spacing.nodeNodeBetweenLayers": 150,
+      "elk.spacing.nodeNode": 100,
     };
 
-    elk.layout(graph).then(({ children }) => {
-      children.forEach((node) => {
-        node.position = { x: node.x, y: node.y };
-      });
-      setNodes(children);
-      
-      // Force edge re-render after nodes are positioned
-      setTimeout(() => {
-        setEdges([...edges]);
-        fitView();
-      }, 50);
-    });
-  }, [getNodes, getEdges, setNodes, setEdges, fitView]);
+    const getLayoutedElements = useCallback(
+      (options) => {
+        const layoutOptions = { ...defaultOptions, ...options };
+        const nodes = getNodes();
+        const edges = getEdges();
 
-  return { getLayoutedElements };
-};
+        const graph = {
+          id: "root",
+          layoutOptions: layoutOptions,
+          children: nodes.map((node) => ({
+            ...node,
+            width: node.measured?.width || 300,
+            height: node.measured?.height || 200,
+          })),
+          edges: edges,
+        };
+
+        elk.layout(graph).then(({ children }) => {
+          children.forEach((node) => {
+            node.position = { x: node.x, y: node.y };
+          });
+          setNodes(children);
+
+          // Force edge re-render after nodes are positioned
+          setTimeout(() => {
+            setEdges([...edges]);
+            fitView();
+          }, 50);
+        });
+      },
+      [getNodes, getEdges, setNodes, setEdges, fitView]
+    );
+
+    return { getLayoutedElements };
+  };
 
   return { getLayoutedElements };
 };
@@ -1005,11 +1008,18 @@ export const AttributeFlowChart = ({ attributes, sheetName }) => {
         fitView
         fitViewOptions={{ padding: 1.5 }}
         className="bg-gray-50"
+        panOnDrag={false}
+        zoomOnScroll={false}
+        zoomOnPinch={false}
+        panOnScroll={false}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        elementsSelectable={false}
       >
         <Background variant="dots" gap={20} size={1} color="#e5e7eb" />
         <Controls
           className="bg-white shadow-lg border border-gray-200 rounded-lg"
-          showInteractive={false}
+          showInteractive={true}
         />
         <MiniMap
           className="bg-white shadow-lg border border-gray-200 rounded-lg"

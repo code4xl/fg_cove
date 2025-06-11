@@ -1,8 +1,9 @@
 import { toast } from "react-hot-toast";
 import { apiConnector } from "../Connector";
-import { userEndpoints, adminEndpoints } from "../Apis";
+import { userEndpoints, adminEndpoints, sheetEndpoints } from "../Apis";
 const { INSERT_TODAY_API, SELF_INFO_API, GET_SHEET_API, UPDATE_ROW_API } = userEndpoints;
 const { FETCH_ALL_METAS_API, UPDATE_METAS_API, } = adminEndpoints;
+const { REFERENCE_LINK_CHECK_API } = sheetEndpoints;
 
 export async function fetchMetadata(login_role) {
   if (login_role === "user") {
@@ -171,5 +172,39 @@ export async function updateRowData(sheetId, data) {
     toast.error("An error occurred while updating row data.");
   } finally {
     toast.dismiss(loadingToast);
+  }
+}
+
+export async function checkAvailableLinks(sheetId) {
+  // No loading toast since this is typically called during UI interactions
+  try {
+    const response = await apiConnector(
+      "GET",
+      `${REFERENCE_LINK_CHECK_API}/${sheetId}`
+    );
+    console.log("Reference Link Check API response: ", response);
+
+    if (response.status === 200) {
+      return {
+        success: true,
+        data: response.data, // This will contain { "unavailable": ["684756a3e8871e043f90832c"] }
+        unavailableSheets: response.data.unavailable || []
+      };
+    } else {
+      throw new Error(response.data.msg || "Failed to check available links");
+    }
+  } catch (error) {
+    console.error("Error checking available links: ", error);
+    // Only show error toast for actual errors, not for expected API responses
+    if (error.response?.status !== 200) {
+      toast.error(
+        error.response?.data?.msg || "Failed to check available reference links."
+      );
+    }
+    return {
+      success: false,
+      error: error.response?.data?.msg || "Failed to check available links",
+      unavailableSheets: []
+    };
   }
 }

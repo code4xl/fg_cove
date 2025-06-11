@@ -288,6 +288,7 @@ const LinkagesFlow = () => {
   const [loading, setLoading] = useState(true);
   const [flowReady, setFlowReady] = useState(false);
   const { getLayoutedElements } = useLayoutedElements();
+  const account = useSelector(selectAccount);
 
   // Fetch metadata on component mount
   useEffect(() => {
@@ -295,7 +296,7 @@ const LinkagesFlow = () => {
       try {
         setLoading(true);
         setFlowReady(false);
-        const loginRole = "admin";
+        const loginRole = account?.role || "user";
         const fetchedMetadata = await fetchMetadata(loginRole);
         console.log("Fetched metadata:", fetchedMetadata);
         setMetadata(fetchedMetadata || []);

@@ -28,13 +28,13 @@ import { logoutFunction } from "../../../services/repository/userRepo";
 
 function NavBar() {
   const ifDMenuState = useSelector(dashboardMenuState);
-  const user = useSelector(selectAccount);
+  const account = useSelector(selectAccount);
   const theme = useSelector(selectTheme);
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
   const onMenuToggle = () => {
-    console.log(user);
+    console.log(account);
     dispatch(
       setCloseDMenu({
         dashboardMenuState: !ifDMenuState,
@@ -49,36 +49,55 @@ function NavBar() {
   };
 
   const logout = () => {
-    dispatch(logoutFunction(user?.role, navigate))
+    dispatch(logoutFunction(account?.role, navigate));
   };
 
   return (
-    <div className="flex w-full sticky top-0 z-50 bg-[var(--bg-secondary)] drop-shadow-xl h-[4rem] py-2">
+    <div className="flex w-full sticky top-0 z-20 bg-[var(--bg-secondary)] drop-shadow-xl h-[4rem] py-2">
       <div className="flex w-full px-[1rem] justify-between items-center">
         <div className="flex items-center space-x-6">
           <div className="text-black font-semibold text-lg">COVE</div>
-          <button onClick={()=> {navigate("/linkages")}} className="flex items-center space-x-1 text-blue-600 cursor-pointer rounded-full border-[.1rem] hover:bg-gray-100 hover:drop-shadow-sm hover:drop-shadow-gray-500 border-gray-300 py-2 px-4 transition-all">
-            <Sparkles className="h-5" />
-            <span className="text-sm font-medium">Linkages</span>
-          </button>
         </div>
         <div className="flex items-center"></div>
         <div className="flex items-center gap-3">
-        <div className="flex items-center space-x-2">
-          <button className="bg-gray-100 border-[0.1rem] border-gray-300 rounded-full text-black px-3 py-1.5 hover:bg-white transition-all text-sm font-medium flex items-center space-x-1">
-            <BarChart3 className="w-4 h-4 text-blue-500" />
-            <span>Dashboard</span>
-          </button>
-          <button onClick={()=> {navigate("/user-control")}} className="bg-gray-100 border-[0.1rem] border-gray-300 rounded-full text-black px-3 py-1.5 hover:bg-white transition-all text-sm font-medium flex items-center space-x-1">
-            <Users className="w-4 h-4 text-purple-500" />
-            <span>Users</span>
-          </button>
-          <button onClick={()=> {navigate("/sheets")}} className="bg-gray-100 border-[0.1rem] border-gray-300 rounded-full text-black px-3 py-1.5 hover:bg-white transition-all text-sm font-medium flex items-center space-x-1">
-            <FileSpreadsheet className="w-4 h-4 text-orange-500" />
-            <span>Sheets</span>
-          </button>
-        </div>
-        <div
+          <div className="flex items-center space-x-2">
+            <button className="bg-gray-100 border-[0.1rem] border-gray-300 rounded-full text-black px-3 py-1.5 hover:bg-white transition-all text-sm font-medium flex items-center space-x-1">
+              <BarChart3 className="w-4 h-4 text-blue-500" />
+              <span>Dashboard</span>
+            </button>
+            <button
+              onClick={() => {
+                navigate("/linkages");
+              }}
+              className="flex items-center space-x-1 text-blue-600 cursor-pointer rounded-full border-[.1rem] hover:bg-gray-100 hover:drop-shadow-sm hover:drop-shadow-gray-500 border-gray-300 py-1.5 px-4 transition-all"
+            >
+              <Sparkles className="h-4" />
+              <span className="text-sm font-medium">Linkages</span>
+            </button>
+
+            {account?.role === "admin" && (
+              <button
+                onClick={() => {
+                  navigate("/user-control");
+                }}
+                className="bg-gray-100 border-[0.1rem] border-gray-300 rounded-full text-black px-3 py-1.5 hover:bg-white transition-all text-sm font-medium flex items-center space-x-1"
+              >
+                <Users className="w-4 h-4 text-purple-500" />
+                <span>Users</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => {
+                navigate("/sheets");
+              }}
+              className="bg-gray-100 border-[0.1rem] border-gray-300 rounded-full text-black px-3 py-1.5 hover:bg-white transition-all text-sm font-medium flex items-center space-x-1"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-orange-500" />
+              <span>Sheets</span>
+            </button>
+          </div>
+          <div
             className="flex items-center justify-center p-1 cursor-pointer"
             onClick={logout}
           >
@@ -95,7 +114,6 @@ function NavBar() {
               </h1>
             </div>
           </div> */}
-          
         </div>
       </div>
     </div>

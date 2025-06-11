@@ -804,7 +804,7 @@ const useLayoutedElements = () => {
     "elk.algorithm": "layered",
     "elk.layered.spacing.nodeNodeBetweenLayers": 150,
     "elk.spacing.nodeNode": 100,
-    "elk.direction": "DOWN",
+    "elk.direction": "RIGHT",
     "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
   };
 
@@ -943,8 +943,11 @@ export const AttributeFlowChart = ({
 
   useEffect(() => {
     getLayoutedElements({
-      "elk.algorithm": "layered",
-      "elk.direction": "DOWN",
+      "elk.algorithm": "org.eclipse.elk.force",
+      "elk.layered.spacing.nodeNodeBetweenLayers": 120,
+      "elk.spacing.nodeNode": 80,
+      // "elk.direction": "RIGHT",
+      "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
     });
   }, [getLayoutedElements]);
 
@@ -958,13 +961,13 @@ export const AttributeFlowChart = ({
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView
-        fitViewOptions={{ padding: 10 }}
+        fitViewOptions={{ padding: 1.5 }}
         className="bg-gray-50"
         panOnDrag={false}
         zoomOnScroll={false}
         zoomOnPinch={false}
         panOnScroll={false}
-        nodesDraggable={false}
+        nodesDraggable={true}
         nodesConnectable={false}
         elementsSelectable={false}
       >

@@ -12,8 +12,7 @@ import ViewSheets from './components/protected/Views/Main';
 import PageNotFound from './components/common/PageNotFound';
 import Linkages from './components/protected/Linkages/Main';
 import { isDeatailSheetBar } from './app/LinkagesSlice';
-import SheetManagement from './components/protected/Views/SheetViews';
-import UserControl from './components/protected/UserControl//UserControl';
+import UserControl from './components/protected/UserControl/UserControl';
 import LoginAdmin from './components/common/LoginAdmin';
 
 const RoutesConfig = () => {
@@ -56,7 +55,7 @@ const RoutesConfig = () => {
   } else {
     return (
       <div
-        className={`w-full h-[100vh] bg-[var(--bg-primary)] flex flex-col overflow-y-auto scrollbar-hide`}
+        className={`w-full h-[100vh] bg-[var(--bg-primary)] flex flex-col overflow-y-auto scrollbar-hide relative`}
       >
         {/*<Sidebar isOpen={ifDMenuState} />*/}
         <NavBar />
@@ -69,7 +68,6 @@ const RoutesConfig = () => {
             
             <Route path="/sheets" element={<ViewSheets />} />
             <Route path="/linkages" element={<Linkages />} />
-            <Route path="/sheets-try" element={<SheetManagement />} />
             <Route path="/user-control" element={<UserControl />} />
           </Routes>
           {/* <div className="bg-[var(--bg-secondary)] b-2 pr-2 text-sm pb-1 flex justify-end items-center">
