@@ -14,6 +14,7 @@ import Linkages from './components/protected/Linkages/Main';
 import { isDeatailSheetBar } from './app/LinkagesSlice';
 import UserControl from './components/protected/UserControl/UserControl';
 import LoginAdmin from './components/common/LoginAdmin';
+import CreateSheet from './components/protected/SheetCreate/Main';
 
 const RoutesConfig = () => {
   const isLoggedIn = useSelector(isUserLoggedIn);
@@ -66,6 +67,7 @@ const RoutesConfig = () => {
             <Route path="*" element={<PageNotFound />} />
             {/* <Route path="/dashboard" element={<Dashboard />} /> */}
             
+            <Route path="/create-sheet" element={<CreateSheet />} />
             <Route path="/sheets" element={<ViewSheets />} />
             <Route path="/linkages" element={<Linkages />} />
             <Route path="/user-control" element={<UserControl />} />

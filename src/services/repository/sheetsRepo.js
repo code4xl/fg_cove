@@ -3,7 +3,7 @@ import { apiConnector } from "../Connector";
 import { userEndpoints, adminEndpoints, sheetEndpoints } from "../Apis";
 const { INSERT_TODAY_API, SELF_INFO_API, GET_SHEET_API, UPDATE_ROW_API } = userEndpoints;
 const { FETCH_ALL_METAS_API, UPDATE_METAS_API, } = adminEndpoints;
-const { REFERENCE_LINK_CHECK_API } = sheetEndpoints;
+const { REFERENCE_LINK_CHECK_API, CREATE_SHEET_API } = sheetEndpoints;
 
 export async function fetchMetadata(login_role) {
   if (login_role === "user") {
@@ -206,5 +206,37 @@ export async function checkAvailableLinks(sheetId) {
       error: error.response?.data?.msg || "Failed to check available links",
       unavailableSheets: []
     };
+  }
+}
+
+export async function createNewSheet(sheetData) {
+  const loadingToast = toast.loading("Creating new sheet...");
+
+  try {
+    console.log(CREATE_SHEET_API, "api endpoint used...")
+    const response = await apiConnector("POST", CREATE_SHEET_API, {...sheetData});
+    
+    console.log("Create Sheet API response:", response);
+
+    if (response.status === 201 || response.status === 200) {
+      toast.success("Sheet created successfully!");
+      return {
+        success: true,
+        data: response.data
+      };
+    } else {
+      throw new Error(response.data.msg || "Failed to create sheet");
+    }
+  } catch (error) {
+    console.error("Error creating sheet:", error);
+    toast.error(
+      error.response?.data?.msg || "Failed to create sheet. Please try again."
+    );
+    return {
+      success: false,
+      error: error.response?.data?.msg || "Failed to create sheet"
+    };
+  } finally {
+    toast.dismiss(loadingToast);
   }
 }
