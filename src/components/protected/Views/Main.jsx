@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Search, X, Plus, ChevronRight, Info } from "lucide-react";
 import { ColumnCreationForm, ColumnUpdateForm } from "./utils/Helper";
 import { useSelector } from "react-redux";
@@ -10,6 +10,8 @@ import {
   updateRowData,
 } from "../../../services/repository/sheetsRepo";
 import { selectAccount } from "../../../app/DashboardSlice";
+import toast from "react-hot-toast";
+import { createPortal } from "react-dom";
 
 // Updated data processing utilities for new format
 const processSheetData = (metadata, sheetsData) => {
@@ -119,11 +121,110 @@ const calculateAllDerivedColumns = (processedSheet) => {
   return updatedSheet;
 };
 
+const InfoTooltip = () => {
+  const [showTooltip, setShowTooltip] = useState(false);
+  const [buttonPosition, setButtonPosition] = useState({ x: 0, y: 0 });
+
+  const handleMouseEnter = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setButtonPosition({
+      x: rect.left + rect.width / 2,
+      y: rect.bottom, // Changed from rect.top to rect.bottom
+    });
+    setShowTooltip(true);
+  };
+
+  const handleMouseLeave = () => {
+    setShowTooltip(false);
+  };
+
+  return (
+    <>
+      <button
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        className="p-1 text-gray-500 hover:text-gray-700 transition-colors"
+        type="button"
+      >
+        <Info size={16} />
+      </button>
+
+      {showTooltip &&
+        createPortal(
+          <div
+            className="fixed bg-gray-900 text-white text-xs rounded-lg shadow-xl p-3 w-80"
+            style={{
+              left: buttonPosition.x - 160, // Center the tooltip (320px / 2)
+              top: buttonPosition.y + 8, // Position below the button with 8px gap
+              zIndex: 9999999,
+            }}
+            onMouseEnter={() => setShowTooltip(true)}
+            onMouseLeave={() => setShowTooltip(false)}
+          >
+            <div className="font-medium mb-2 text-center">
+              Column Type Color Guide
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 bg-gray-300 rounded border"></div>
+                <span className="flex-1">Independent</span>
+                <span className="text-gray-300">Normal columns</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 bg-yellow-300 rounded border"></div>
+                <span className="flex-1 text-yellow-300">Derived</span>
+                <span className="text-gray-300">
+                  Calculated from other columns
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 bg-blue-300 rounded border"></div>
+                <span className="flex-1 text-blue-300">Referenced</span>
+                <span className="text-gray-300">Linked from other sheets</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 bg-purple-300 rounded border"></div>
+                <span className="flex-1 text-purple-300">Recurrent</span>
+                <span className="text-gray-300">
+                  Values from previous period
+                </span>
+              </div>
+            </div>
+
+            <div className="border-t border-gray-700 mt-2 pt-2">
+              <div className="text-center text-gray-400 text-xs">
+                Hover over derived/recurrent columns to see relationships
+              </div>
+            </div>
+
+            {/* Tooltip arrow pointing up (since tooltip is below button) */}
+            <div
+              className="absolute border-4 border-transparent border-b-gray-900"
+              style={{
+                bottom: "100%",
+                left: "50%",
+                transform: "translateX(-50%)",
+              }}
+            ></div>
+          </div>,
+          document.body
+        )}
+    </>
+  );
+};
+
 // Main Application Component
 const SheetManagement = () => {
   const account = useSelector(selectAccount);
 
   const [timestampsData, setTimestampsData] = useState([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const initialFetchRef = useRef(false);
+  const currentFetchRef = useRef(null);
 
   const [rawMetadata, setRawMetadata] = useState([]);
   const [rawSheetsData, setRawSheetsData] = useState({});
@@ -235,18 +336,21 @@ const SheetManagement = () => {
   // Initialize metadata on component mount
   useEffect(() => {
     const initializeMetadata = async () => {
+      // Prevent double calls
+      if (initialFetchRef.current) return;
+      initialFetchRef.current = true;
+
       try {
         setMetadataLoading(true);
         const fetchedMetadata = await fetchMetadata(account?.role || "user");
         console.log("Fetched metadata:", fetchedMetadata);
         setRawMetadata(fetchedMetadata || []);
 
-        // Set first sheet as selected if available - but don't process yet
+        // Set first sheet as selected if available
         if (fetchedMetadata && fetchedMetadata.length > 0) {
           const firstSheetId = fetchedMetadata[0]["_id"];
           console.log("Setting first sheet ID:", firstSheetId);
           setSelectedSheetId(firstSheetId);
-          // Don't call fetchSheetData here - let the other useEffect handle it
         }
       } catch (error) {
         console.error("Error initializing metadata:", error);
@@ -256,32 +360,63 @@ const SheetManagement = () => {
       }
     };
 
-    if (account) {
+    if (account && !initialFetchRef.current) {
       initializeMetadata();
     }
   }, [account]);
 
   useEffect(() => {
     if (selectedSheetId && rawMetadata.length > 0) {
+      // Cancel previous fetch if still running
+      if (currentFetchRef.current) {
+        currentFetchRef.current = true; // Mark as cancelled
+      }
+
+      const fetchId = Date.now(); // Unique ID for this fetch
+      currentFetchRef.current = fetchId;
+
       console.log("Year/Month changed, refetching data for:", selectedSheetId);
-      fetchSheetData(selectedSheetId);
+
+      const timeoutId = setTimeout(() => {
+        // Only proceed if this is still the current fetch
+        if (currentFetchRef.current === fetchId) {
+          fetchSheetData(selectedSheetId);
+        }
+      }, 100); // Small delay to debounce rapid changes
+
+      return () => {
+        clearTimeout(timeoutId);
+        if (currentFetchRef.current === fetchId) {
+          currentFetchRef.current = null;
+        }
+      };
     }
-  }, [selectedYear, selectedMonth, selectedSheetId]);
+  }, [selectedYear, selectedMonth, selectedSheetId, rawMetadata.length]);
 
   const fetchSheetData = async (sheetId) => {
     if (!sheetId) return;
 
+    const fetchId = currentFetchRef.current;
     setLoading(true);
+
     try {
       console.log(
         `Fetching data for sheet: ${sheetId}, year: ${selectedYear}, month: ${selectedMonth}`
       );
+
       const sheetData = await getSheetsData(
         account?.role,
         sheetId,
         selectedYear,
         selectedMonth
       );
+
+      // Check if this fetch was cancelled
+      if (currentFetchRef.current !== fetchId) {
+        console.log("Fetch cancelled, ignoring response");
+        return;
+      }
+
       console.log("Raw API response:", sheetData);
 
       // Validate that sheetData is an array
@@ -297,44 +432,59 @@ const SheetManagement = () => {
         return newData;
       });
     } catch (error) {
-      console.error("Error fetching sheet data:", error);
-      setRawSheetsData((prev) => ({
-        ...prev,
-        [sheetId]: [],
-      }));
+      // Only handle error if fetch wasn't cancelled
+      if (currentFetchRef.current === fetchId) {
+        console.error("Error fetching sheet data:", error);
+        setRawSheetsData((prev) => ({
+          ...prev,
+          [sheetId]: [],
+        }));
+      }
     } finally {
-      setLoading(false);
+      if (currentFetchRef.current === fetchId) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    console.log(
-      "Second useEffect - selectedSheetId:",
-      selectedSheetId,
-      "rawSheetsData keys:",
-      Object.keys(rawSheetsData)
-    );
-
-    if (selectedSheetId && !rawSheetsData[selectedSheetId]) {
-      console.log("Fetching sheet data for:", selectedSheetId);
-      fetchSheetData(selectedSheetId);
-    } else if (
-      selectedSheetId &&
-      rawSheetsData[selectedSheetId] &&
-      rawMetadata &&
-      rawMetadata.length > 0
-    ) {
-      console.log("Processing data with existing sheet data");
-      const processed = processSheetData(rawMetadata, rawSheetsData);
-      console.log("Final processed data:", processed);
-      setProcessedData(processed);
+    if (selectedSheetId && rawMetadata && rawMetadata.length > 0) {
+      if (rawSheetsData[selectedSheetId]) {
+        // Data exists, process it
+        console.log("Processing data with existing sheet data");
+        const processed = processSheetData(rawMetadata, rawSheetsData);
+        console.log("Final processed data:", processed);
+        setProcessedData(processed);
+      }
+      // Note: We don't fetch here anymore, the other useEffect handles fetching
     }
   }, [selectedSheetId, rawSheetsData, rawMetadata]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      // Close column type dropdown when clicking outside
+      if (
+        showColumnTypeDropdown &&
+        !event.target.closest(".column-dropdown-container")
+      ) {
+        setShowColumnTypeDropdown(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showColumnTypeDropdown]);
 
   // Refresh data function
   const refreshData = async () => {
     try {
       setLoading(true);
+
+      // Reset fetch tracking
+      initialFetchRef.current = false;
+      currentFetchRef.current = null;
 
       // Refresh metadata
       const freshMetadata = await fetchMetadata(account?.role || "user");
@@ -380,7 +530,7 @@ const SheetManagement = () => {
 
     if (currentSheet && currentSheet.attributes.length > 0) {
       const dateAttribute = currentSheet.attributes[0];
-      console.log("Checking today's data in attribute:", dateAttribute);
+      // console.log("Checking today's data in attribute:", dateAttribute);
       const hasToday = dateAttribute.data.some(
         (date) => date.includes(todayFormatted) || date.includes(today)
       );
@@ -421,8 +571,6 @@ const SheetManagement = () => {
       return date.toISOString().split("T")[0];
     }
   };
-
-  
 
   useEffect(() => {
     // Check if data is loaded and we have a current sheet
@@ -467,6 +615,8 @@ const SheetManagement = () => {
       attribute["linkedFrom"].sheetObjectId != null
     )
       return "referenced";
+    if (attribute.recurrentCheck && attribute.recurrentCheck.isRecurrent)
+      return "recurrent";
     return "normal";
   };
 
@@ -476,19 +626,33 @@ const SheetManagement = () => {
         return "bg-yellow-100 text-yellow-800";
       case "referenced":
         return "bg-blue-100 text-blue-800";
+      case "recurrent":
+        return "bg-purple-100 text-purple-800";
       default:
         return "bg-gray-50";
     }
   };
 
   const handleRowClick = (rowIndex) => {
+    // Only handle clicks on existing data rows (not the blank row)
+    if (rowIndex >= numRows) return;
+
     setSelectedRowIndex(rowIndex);
     setModalType("update");
 
     const rowData = {};
-    currentSheet.attributes.forEach((attr) => {
-      rowData[attr.name] = attr.data[rowIndex] || "";
+    currentSheet.attributes.forEach((attr, cellIndex) => {
+      const columnType = getColumnType(attr);
+
+      if (columnType === "recurrent") {
+        // For recurrent columns, use the calculated value
+        rowData[attr.name] = calculateRecurrentValue(attr, cellIndex, rowIndex);
+      } else {
+        // For other column types, use the stored data
+        rowData[attr.name] = attr.data[rowIndex] || "";
+      }
     });
+
     setModalData(rowData);
     setShowModal(true);
   };
@@ -765,7 +929,10 @@ const SheetManagement = () => {
         );
         if (
           attributeIndex !== -1 &&
-          !currentSheet.attributes[attributeIndex].derived
+          !currentSheet.attributes[attributeIndex].derived &&
+          !currentSheet.attributes[attributeIndex].recurrentCheck
+            ?.isRecurrent && // Skip recurrent columns
+          !currentSheet.attributes[attributeIndex].linkedFrom?.sheetObjectId
         ) {
           const value = modalData[fieldName];
           const processedValue =
@@ -856,6 +1023,11 @@ const SheetManagement = () => {
 
   const handleSaveColumnNew = async (columnData) => {
     console.log("Saving new column:", columnData);
+    const hasExistingData =
+      currentSheet &&
+      currentSheet.attributes.length > 0 &&
+      currentSheet.attributes[0].data &&
+      currentSheet.attributes[0].data.length > 0;
 
     // Create new column metadata in the required format
     const newColumnMeta = {
@@ -873,9 +1045,10 @@ const SheetManagement = () => {
         attributeIndice: columnData.reference?.columnIndex || null,
       },
       recurrentCheck: {
-        isRecurrent: false,
-        recurrentReferenceIndice: null,
-        recurrenceFedStatus: false,
+        isRecurrent: !!columnData.recurrent,
+        recurrentReferenceIndice:
+          columnData.recurrent?.recurrentColumnIndex || null,
+        recurrenceFedStatus: columnData.recurrent ? hasExistingData : false,
       },
       derived:
         columnData.additionIndices?.length > 0 ||
@@ -919,6 +1092,7 @@ const SheetManagement = () => {
 
     setShowColumnModal(false);
     setColumnType(null);
+    setShowColumnTypeDropdown(false);
 
     return updatedCurrentSheetMeta;
   };
@@ -933,12 +1107,20 @@ const SheetManagement = () => {
       (sheet) => sheet["_id"] === selectedSheetId
     );
 
+    // Determine if current sheet has data (to set recurrenceFedStatus)
+    const hasExistingData =
+      currentSheet &&
+      currentSheet.attributes.length > 0 &&
+      currentSheet.attributes[0].data &&
+      currentSheet.attributes[0].data.length > 0;
+
     // Create updated attributes array
     const updatedAttributes = currentSheetMeta.attributes.map((attr, index) => {
       if (index === selectedColumnIndex) {
         return {
           ...attr,
           name: columnData.name,
+          // Update formula for derived columns
           formula:
             columnData.additionIndices?.length > 0 ||
             columnData.subtractionIndices?.length > 0
@@ -947,12 +1129,30 @@ const SheetManagement = () => {
                   subtractionIndices: columnData.subtractionIndices || [],
                 }
               : attr.formula,
+          // Update linkedFrom for reference
           linkedFrom: columnData.reference
             ? {
                 sheetObjectId: columnData.reference.sheetId,
                 attributeIndice: columnData.reference.columnIndex,
               }
-            : attr.linkedFrom,
+            : {
+                sheetObjectId: null,
+                attributeIndice: null,
+              },
+          // Update recurrentCheck for recurrent
+          recurrentCheck: columnData.recurrent
+            ? {
+                isRecurrent: true,
+                recurrentReferenceIndice:
+                  columnData.recurrent.referenceColumnIndex,
+                recurrenceFedStatus: hasExistingData,
+              }
+            : {
+                isRecurrent: false,
+                recurrentReferenceIndice: null,
+                recurrenceFedStatus: false,
+              },
+          // Update derived status
           derived:
             columnData.additionIndices?.length > 0 ||
             columnData.subtractionIndices?.length > 0 ||
@@ -979,6 +1179,18 @@ const SheetManagement = () => {
 
       if (originalAttr.name !== columnData.name) {
         action = "nameChange";
+      } else if (
+        // Check if reference changed
+        originalAttr.linkedFrom?.sheetObjectId !==
+          columnData.reference?.sheetId ||
+        originalAttr.linkedFrom?.attributeIndice !==
+          columnData.reference?.columnIndex ||
+        // Check if recurrent changed
+        originalAttr.recurrentCheck?.isRecurrent !== !!columnData.recurrent ||
+        originalAttr.recurrentCheck?.recurrentReferenceIndice !==
+          columnData.recurrent?.referenceColumnIndex
+      ) {
+        action = "formulaUpdate";
       }
 
       // Call the API to update metadata
@@ -994,13 +1206,46 @@ const SheetManagement = () => {
         setSelectedColumnIndex(null);
 
         await refreshData();
-
-        // Refresh the page/data
-        // window.location.reload();
       }
     } catch (error) {
       console.error("Error updating column:", error);
     }
+  };
+
+  const handleBlankRowClick = () => {
+    // Check if today's data already exists
+    if (checkTodaysData()) {
+      toast.error(
+        "Today's data already exists. You cannot add duplicate entries for today."
+      );
+      return;
+    }
+
+    // If no today's data, open insert modal
+    setModalType("insert");
+    setSelectedRowIndex(null); // No specific row index for insert
+
+    // Initialize modal data with today's date for date field
+    const initialModalData = {};
+    currentSheet.attributes.forEach((attr, index) => {
+      if (attr.name.toLowerCase() === "date" || index === 0) {
+        initialModalData[attr.name] = getTodaysDate();
+      } else if (!attr.derived && !attr.linkedFrom?.sheetObjectId) {
+        initialModalData[attr.name] = "";
+      }
+    });
+
+    setModalData(initialModalData);
+    setShowModal(true);
+  };
+
+  const getTodaysDate = () => {
+    const today = new Date();
+    return today.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
   };
 
   // const handleSaveColumnNew = (columnData) => {
@@ -1090,45 +1335,102 @@ const SheetManagement = () => {
 
   const renderFormulaTooltip = (attribute, columnIndex) => {
     console.log("Rendering formula tooltip for attribute:", attribute);
-    if (!attribute.derived || !attribute.formula) return null;
 
-    const additionIndices = attribute.formula["additionIndices"] || [];
-    const subtractionIndices = attribute.formula["subtractionIndices"] || [];
+    // Handle derived columns
+    if (attribute.derived && attribute.formula) {
+      const additionIndices = attribute.formula["additionIndices"] || [];
+      const subtractionIndices = attribute.formula["subtractionIndices"] || [];
 
-    const additionTerms = additionIndices.map(
-      (idx) => currentSheet.attributes[idx]?.name || `Column${idx}`
-    );
-    const subtractionTerms = subtractionIndices.map(
-      (idx) => currentSheet.attributes[idx]?.name || `Column${idx}`
-    );
+      const additionTerms = additionIndices.map(
+        (idx) => currentSheet.attributes[idx]?.name || `Column${idx}`
+      );
+      const subtractionTerms = subtractionIndices.map(
+        (idx) => currentSheet.attributes[idx]?.name || `Column${idx}`
+      );
 
-    return (
-      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 p-3 bg-black text-white text-xs rounded-lg shadow-lg z-50 whitespace-nowrap">
-        <div className="font-semibold mb-1">Formula:</div>
-        <div className="flex items-center gap-1 flex-wrap">
-          {additionTerms.map((term, idx) => (
-            <span
-              key={`add-${idx}`}
-              className="bg-green-600 px-2 py-1 rounded text-white font-medium"
-            >
-              {term.replace(/-/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
-            </span>
-          ))}
-          {additionTerms.length > 0 && subtractionTerms.length > 0 && (
-            <span className="text-gray-300 mx-1 font-bold">-</span>
-          )}
-          {subtractionTerms.map((term, idx) => (
-            <span
-              key={`sub-${idx}`}
-              className="bg-red-600 px-2 py-1 rounded text-white font-medium"
-            >
-              {term.replace(/-/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
-            </span>
-          ))}
+      return (
+        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 p-3 bg-black text-white text-xs rounded-lg shadow-lg z-50 whitespace-nowrap">
+          <div className="font-semibold mb-1">Formula:</div>
+          <div className="flex items-center gap-1 flex-wrap">
+            {additionTerms.map((term, idx) => (
+              <span
+                key={`add-${idx}`}
+                className="bg-green-600 px-2 py-1 rounded text-white font-medium"
+              >
+                {term
+                  .replace(/-/g, " ")
+                  .replace(/\b\w/g, (l) => l.toUpperCase())}
+              </span>
+            ))}
+            {additionTerms.length > 0 && subtractionTerms.length > 0 && (
+              <span className="text-gray-300 mx-1 font-bold">-</span>
+            )}
+            {subtractionTerms.map((term, idx) => (
+              <span
+                key={`sub-${idx}`}
+                className="bg-red-600 px-2 py-1 rounded text-white font-medium"
+              >
+                {term
+                  .replace(/-/g, " ")
+                  .replace(/\b\w/g, (l) => l.toUpperCase())}
+              </span>
+            ))}
+          </div>
+          <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-black"></div>
         </div>
-        <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-black"></div>
-      </div>
-    );
+      );
+    }
+
+    // Handle recurrent columns
+    if (attribute.recurrentCheck?.isRecurrent) {
+      const refIndex = attribute.recurrentCheck.recurrentReferenceIndice;
+      const refColumn = currentSheet.attributes[refIndex];
+
+      return (
+        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 p-3 bg-purple-900 text-white text-xs rounded-lg shadow-lg z-50 whitespace-nowrap">
+          <div className="font-semibold mb-1">Recurrent Reference:</div>
+          <div className="flex items-center gap-1">
+            <span className="bg-purple-600 px-2 py-1 rounded text-white font-medium">
+              {refColumn?.name
+                .replace(/-/g, " ")
+                .replace(/\b\w/g, (l) => l.toUpperCase()) ||
+                `Column ${refIndex}`}
+            </span>
+            <span className="text-purple-300">→ Previous Period</span>
+          </div>
+          <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-purple-900"></div>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  const calculateRecurrentValue = (attribute, columnIndex, rowIndex) => {
+    // Check if this is a recurrent column
+    if (!attribute.recurrentCheck?.isRecurrent) {
+      return attribute.data[rowIndex] || "0";
+    }
+
+    const referenceColumnIndex =
+      attribute.recurrentCheck.recurrentReferenceIndice;
+
+    // Get the reference column
+    const referenceColumn = currentSheet.attributes[referenceColumnIndex];
+    if (!referenceColumn) {
+      return "0"; // No reference column found
+    }
+
+    // For recurrent columns, we need to get the value from the previous period
+    // If this is the first row (rowIndex = 0), there's no previous period
+    if (rowIndex === 0) {
+      return "0"; // No previous period for first row
+    }
+
+    // Get the value from the previous row (previous period) of the reference column
+    const previousPeriodValue = referenceColumn.data[rowIndex - 1];
+
+    return previousPeriodValue || "0";
   };
 
   const renderTable = () => {
@@ -1171,16 +1473,31 @@ const SheetManagement = () => {
     rows.push(blankRow);
 
     // Calculate totals row
-    const totalsRow = currentSheet.attributes.map((attr) => {
+    const totalsRow = currentSheet.attributes.map((attr, cellIndex) => {
       const columnType = getColumnType(attr);
       if (attr.name.toLowerCase() === "date") return "Total";
 
-      if (columnType === "derived" || columnType === "normal") {
+      if (
+        columnType === "derived" ||
+        columnType === "normal" ||
+        columnType === "referenced"
+      ) {
         let total = 0;
         for (let i = 0; i < numRows; i++) {
           const value = attr.data[i] || 0;
           if (typeof value === "number") {
             total += value;
+          }
+        }
+        return total;
+      } else if (columnType === "recurrent") {
+        // Calculate total for recurrent columns using calculated values
+        let total = 0;
+        for (let i = 0; i < numRows; i++) {
+          const value = calculateRecurrentValue(attr, cellIndex, i);
+          const numValue = parseFloat(value) || 0;
+          if (!isNaN(numValue)) {
+            total += numValue;
           }
         }
         return total;
@@ -1200,11 +1517,13 @@ const SheetManagement = () => {
                   const isHighlighted =
                     hoveredColumn !== null &&
                     hoveredColumn !== index &&
-                    currentSheet.attributes[hoveredColumn]?.derived;
+                    (currentSheet.attributes[hoveredColumn]?.derived ||
+                      currentSheet.attributes[hoveredColumn]?.recurrentCheck
+                        ?.isRecurrent);
 
                   let headerClass = getColumnClass(columnType);
 
-                  // Apply highlighting when hovering over a derived column
+                  // Apply highlighting when hovering over a derived or recurrent column
                   if (isHighlighted) {
                     const hoveredAttr = currentSheet.attributes[hoveredColumn];
                     if (hoveredAttr?.formula) {
@@ -1218,6 +1537,12 @@ const SheetManagement = () => {
                       } else if (subtractionIndices.includes(index)) {
                         headerClass = "bg-red-200 text-red-900";
                       }
+                    } else if (hoveredAttr?.recurrentCheck?.isRecurrent) {
+                      const recurrentIndex =
+                        hoveredAttr.recurrentCheck.recurrentReferenceIndice;
+                      if (recurrentIndex === index) {
+                        headerClass = "bg-purple-200 text-purple-900";
+                      }
                     }
                   }
 
@@ -1226,7 +1551,7 @@ const SheetManagement = () => {
                       key={index}
                       className={`relative px-4 py-3 text-center text-xs font-medium uppercase tracking-wider whitespace-nowrap transition-all duration-200 ${headerClass}`}
                       onMouseEnter={() => {
-                        if (attr.derived) {
+                        if (attr.derived || attr.recurrentCheck?.isRecurrent) {
                           setHoveredColumn(index);
                         }
                       }}
@@ -1247,11 +1572,14 @@ const SheetManagement = () => {
                         {attr.name
                           .replace(/-/g, " ")
                           .replace(/\b\w/g, (l) => l.toUpperCase())}
-                        {columnType === "derived" && (
-                          <Info className="w-3 h-3 text-yellow-600" />
+                        {(columnType === "derived" ||
+                          columnType === "recurrent") && (
+                          <Info className="w-3 h-3 text-gray-600" />
                         )}
                       </div>
-                      {isHovered && renderFormulaTooltip(attr, index)}
+                      {isHovered &&
+                        (attr.derived || attr.recurrentCheck?.isRecurrent) &&
+                        renderFormulaTooltip(attr, index)}
                     </th>
                   );
                 })}
@@ -1264,9 +1592,17 @@ const SheetManagement = () => {
                   <tr
                     key={rowIndex}
                     className={`hover:bg-gray-50 cursor-pointer ${
-                      isBlankRow ? "bg-blue-50" : ""
+                      isBlankRow
+                        ? checkTodaysData()
+                          ? "display-none bg-green-50 cursor-default"
+                          : "bg-blue-50 cursor-pointer hover:bg-blue-100"
+                        : "cursor-none"
                     }`}
-                    onClick={() => handleRowClick(rowIndex)}
+                    onClick={() =>
+                      isBlankRow
+                        ? handleBlankRowClick()
+                        : handleRowClick(rowIndex)
+                    }
                   >
                     {row.map((cell, cellIndex) => {
                       const attr = currentSheet.attributes[cellIndex];
@@ -1284,6 +1620,8 @@ const SheetManagement = () => {
                               ? "text-gray-950"
                               : columnType === "referenced"
                               ? "text-gray-950"
+                              : columnType === "recurrent"
+                              ? "text-gray-950"
                               : "text-gray-900 font-medium"
                           } ${isDisabled ? "opacity-75" : ""} text-center`}
                         >
@@ -1293,14 +1631,41 @@ const SheetManagement = () => {
                                 ? "bg-yellow-200 rounded-md px-3 py-1 w-full inline-block"
                                 : columnType === "referenced" && !isBlankRow
                                 ? "bg-gray-200 rounded-md w-full px-3 py-1 inline-block"
+                                : columnType === "recurrent" && !isBlankRow
+                                ? "bg-purple-200 rounded-md w-full px-3 py-1 inline-block"
                                 : ""
                             }`}
                           >
                             {isBlankRow &&
                             (columnType === "derived" ||
-                              columnType === "referenced")
+                              columnType === "referenced" ||
+                              columnType === "recurrent")
                               ? "--"
-                              : cell || (isBlankRow ? "Enter data..." : "")}
+                              : (() => {
+                                  // Calculate the display value based on column type
+                                  const attr =
+                                    currentSheet.attributes[cellIndex];
+                                  let displayValue;
+
+                                  if (columnType === "recurrent") {
+                                    displayValue = calculateRecurrentValue(
+                                      attr,
+                                      cellIndex,
+                                      rowIndex
+                                    );
+                                  } else {
+                                    displayValue = cell;
+                                  }
+
+                                  return (
+                                    displayValue ||
+                                    (isBlankRow
+                                      ? checkTodaysData()
+                                        ? "Data complete"
+                                        : "Click to enter today's data"
+                                      : "")
+                                  );
+                                })()}
                           </div>
                         </td>
                       );
@@ -1335,7 +1700,7 @@ const SheetManagement = () => {
               </div>
               {showColumnTypeDropdown && (
                 <div
-                  className="absolute top-20 right-0 mt-2 w-40 bg-white shadow-lg rounded-md border border-gray-200 z-50"
+                  className="absolute top-20 right-0 mt-2 w-40 bg-white shadow-lg rounded-md border border-gray-200 z-50 column-dropdown-container"
                   style={{
                     left: dropdownPosition.x - 100,
                     top: dropdownPosition.y + 10,
@@ -1346,7 +1711,7 @@ const SheetManagement = () => {
                     onClick={() => {
                       setColumnType("independent");
                       setShowColumnModal(true);
-                      setShowColumnTypeDropdown(false);
+                      setShowColumnTypeDropdown(false); // Close dropdown
                     }}
                   >
                     Independent
@@ -1356,7 +1721,7 @@ const SheetManagement = () => {
                     onClick={() => {
                       setColumnType("derived");
                       setShowColumnModal(true);
-                      setShowColumnTypeDropdown(false);
+                      setShowColumnTypeDropdown(false); // Close dropdown
                     }}
                   >
                     Derived
@@ -1398,16 +1763,14 @@ const SheetManagement = () => {
             {currentSheet.attributes.map((attr, index) => {
               const columnType = getColumnType(attr);
               const isDisabled =
-                columnType === "derived" || columnType === "referenced";
-              const isDateField = attr.name.toLowerCase() === "date" || index === 0; // Assuming first column is always date
+                columnType === "derived" ||
+                columnType === "referenced" ||
+                columnType === "recurrent"; // Add recurrent to disabled columns
+              const isDateField =
+                attr.name.toLowerCase() === "date" || index === 0;
               const shouldDisableDateInInsert =
                 modalType === "insert" && isDateField;
               const finalDisabled = isDisabled || shouldDisableDateInInsert;
-
-              let value = modalData[attr.name] || "";
-              if (modalType === "insert" && isDateField && !value) {
-                value = getTodaysDate();
-              }
 
               return (
                 <div key={index} className="space-y-1">
@@ -1417,23 +1780,38 @@ const SheetManagement = () => {
                       .replace(/\b\w/g, (l) => l.toUpperCase())}
                     {columnType === "derived" && " ⭐"}
                     {columnType === "referenced" && " 🔗"}
+                    {columnType === "recurrent" && " 🔄"}{" "}
+                    {/* Add recurrent indicator */}
                     {shouldDisableDateInInsert && " 📅"}
                   </label>
                   <input
-                    type={
-                      isDateField && modalType === "update" ? "text" : "text"
-                    }
+                    type="text"
                     value={modalData[attr.name] || ""}
-                    onChange={(e) =>
-                      {if(!isDateField){handleInputChange(attr.name, e.target.value)}}
+                    onChange={(e) => {
+                      if (
+                        !(isDateField && modalType === "insert") &&
+                        !isDisabled
+                      ) {
+                        handleInputChange(attr.name, e.target.value);
+                      }
+                    }}
+                    disabled={finalDisabled}
+                    placeholder={
+                      isDateField
+                        ? modalType === "insert"
+                          ? "Today's date (auto-filled)"
+                          : `${attr.name}`
+                        : columnType === "recurrent"
+                        ? "Auto-calculated from previous period"
+                        : `Enter ${attr.name}`
                     }
-                    disabled={isDateField}
-                    placeholder={isDateField ? `${attr.name}` : `Enter ${attr.name}`}
                     className={`w-full px-3 py-2 border border-gray-300 rounded-md text-sm ${
                       columnType === "derived"
                         ? "bg-yellow-50 border-yellow-300"
                         : columnType === "referenced"
                         ? "bg-blue-50 border-blue-300 opacity-60"
+                        : columnType === "recurrent"
+                        ? "bg-purple-50 border-purple-300 opacity-60"
                         : shouldDisableDateInInsert
                         ? "bg-gray-50 border-gray-300"
                         : "bg-white"
@@ -1442,6 +1820,16 @@ const SheetManagement = () => {
                   {columnType === "derived" && attr.humanFormula && (
                     <div className="text-xs text-gray-500">
                       Formula: {attr.humanFormula}
+                    </div>
+                  )}
+                  {columnType === "recurrent" && (
+                    <div className="text-xs text-purple-600">
+                      Value from previous period of:{" "}
+                      {currentSheet.attributes[
+                        attr.recurrentCheck?.recurrentReferenceIndice
+                      ]?.name
+                        ?.replace(/-/g, " ")
+                        ?.replace(/\b\w/g, (l) => l.toUpperCase()) || "Unknown"}
                     </div>
                   )}
                 </div>
@@ -1524,13 +1912,13 @@ const SheetManagement = () => {
   }
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-gray-100">
-      <div className="flex">
+    <div className="h-[calc(100vh-4rem)] bg-gray-100 overflow-hidden">
+      <div className="flex h-full">
         {/* Sidebar */}
         <div
           className={`${
             sidebarOpen ? "w-64" : "w-0"
-          } transition-all duration-300 min-h-[calc(100vh-4rem)] bg-white border-r border-gray-200 overflow-hidden`}
+          } transition-all duration-300 h-full bg-white border-r border-gray-200 overflow-hidden flex-shrink-0`}
         >
           <div className="p-4">
             <div className="flex items-center justify-between mb-4">
@@ -1602,7 +1990,7 @@ const SheetManagement = () => {
         </div>
 
         {/* Main Content */}
-        <div className="flex-1">
+        <div className="flex-1 flex flex-col overflow-hidden">
           {!sidebarOpen && (
             <button
               onClick={() => setSidebarOpen(true)}
@@ -1612,9 +2000,9 @@ const SheetManagement = () => {
             </button>
           )}
 
-          <div className="p-6">
+          <div className="p-2 h-full flex flex-col overflow-hidden">
             {processedData.length > 0 ? (
-              <div className="bg-white rounded-lg shadow-sm">
+              <div className="bg-white rounded-lg shadow-sm flex-1 flex flex-col overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-200">
                   <div className="flex items-center justify-between">
                     <div>
@@ -1661,6 +2049,7 @@ const SheetManagement = () => {
                       )}
                     </div>
                     <div className="flex items-center space-x-3">
+                      <InfoTooltip />
                       <select
                         value={selectedYear}
                         onChange={(e) =>
@@ -1711,7 +2100,7 @@ const SheetManagement = () => {
                   </div>
                 </div>
 
-                <div className="overflow-hidden">{renderTable()}</div>
+                <div className="flex-1 overflow-hidden">{renderTable()}</div>
               </div>
             ) : (
               <div className="bg-white rounded-lg shadow-sm p-8">
@@ -1729,7 +2118,11 @@ const SheetManagement = () => {
 
       <ColumnCreationForm
         isOpen={showColumnModal}
-        onClose={() => setShowColumnModal(false)}
+        onClose={() => {
+          setShowColumnModal(false);
+          setColumnType(null);
+          setShowColumnTypeDropdown(false);
+        }}
         onSave={handleSaveColumnNew}
         type={columnType}
         sheets={processedData}
@@ -1745,6 +2138,10 @@ const SheetManagement = () => {
           }}
           onSave={handleUpdateColumn}
           existingColumns={currentSheet?.attributes || []}
+          availableSheets={processedData.filter(
+            (sheet) => sheet._id !== selectedSheetId
+          )}
+          currentSheetId={selectedSheetId} // Make sure this is included
           existingData={{
             name: currentSheet?.attributes[selectedColumnIndex]?.name || "",
             additionIndices:
@@ -1764,8 +2161,17 @@ const SheetManagement = () => {
                       ?.attributeIndice,
                 }
               : null,
+            recurrent: currentSheet?.attributes[selectedColumnIndex]
+              ?.recurrentCheck?.isRecurrent
+              ? {
+                  referenceColumnIndex:
+                    currentSheet?.attributes[selectedColumnIndex]
+                      ?.recurrentCheck?.recurrentReferenceIndice,
+                }
+              : null,
             isDerived:
               currentSheet?.attributes[selectedColumnIndex]?.derived || false,
+            currentColumnIndex: selectedColumnIndex,
           }}
         />
       )}

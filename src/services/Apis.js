@@ -28,3 +28,7 @@ export const userManagementAPIs = {
   REVOKE_ACCESS_API: BaseURL + "/v1/user/revoke-access",
   ALL_USERS_API: BaseURL + "/v1/user/all-users",
 };
+
+export const sheetEndpoints = {
+  REFERENCE_LINK_CHECK_API: BaseURL + "/v1/nodes/available-links",
+}

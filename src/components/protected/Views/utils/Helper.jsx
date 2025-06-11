@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { X, Plus, ChevronDown, Minus, Info } from "lucide-react";
+import { X, Plus, ChevronDown, Minus, Info, RotateCcw } from "lucide-react";
+import { checkAvailableLinks } from "../../../../services/repository/sheetsRepo";
 
 export const ColumnCreationForm = ({
   isOpen,
@@ -17,6 +18,13 @@ export const ColumnCreationForm = ({
   const [derivedAdditions, setDerivedAdditions] = useState([]);
   const [derivedSubtractions, setDerivedSubtractions] = useState([]);
 
+  const [showRecurrent, setShowRecurrent] = useState(false);
+  const [selectedRecurrentColumn, setSelectedRecurrentColumn] = useState(null);
+  const [availableSheetsForReference, setAvailableSheetsForReference] =
+    useState([]);
+  const [sheetSearchTerm, setSheetSearchTerm] = useState("");
+  const [columnSearchTerm, setColumnSearchTerm] = useState("");
+
   // Get available sheets (excluding current sheet) from processed data
   const availableSheets = sheets.filter(
     (sheet) => sheet["_id"] !== currentSheetId
@@ -25,6 +33,35 @@ export const ColumnCreationForm = ({
   // Get current sheet attributes from processed data
   const currentSheet = sheets.find((s) => s["_id"] === currentSheetId);
   const currentAttributes = currentSheet?.attributes || [];
+
+  useEffect(() => {
+    const checkReferences = async () => {
+      if (currentSheetId && type === "independent") {
+        const result = await checkAvailableLinks(currentSheetId);
+        if (result.success) {
+          const filteredSheets = availableSheets.filter(
+            (sheet) => !result.unavailableSheets.includes(sheet._id)
+          );
+          setAvailableSheetsForReference(filteredSheets);
+        }
+      }
+    };
+
+    checkReferences();
+  }, [currentSheetId, type]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (isReferenceDropdownOpen && !event.target.closest(".relative")) {
+        setIsReferenceDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isReferenceDropdownOpen]);
 
   const handleSave = () => {
     console.log("Saving column data...");
@@ -40,12 +77,50 @@ export const ColumnCreationForm = ({
           : null,
         additionIndices: derivedAdditions,
         subtractionIndices: derivedSubtractions,
+
+        recurrent:
+          showRecurrent && selectedRecurrentColumn
+            ? {
+                recurrentColumnIndex: selectedRecurrentColumn.index,
+                recurrentColumnName: selectedRecurrentColumn.name,
+              }
+            : null,
       };
 
       console.log("Column data being saved:", columnData);
       onSave(columnData);
       resetForm();
       onClose();
+    }
+  };
+
+  const handleReferenceToggle = () => {
+    if (showRecurrent) {
+      // If recurrent is active, disable it first
+      setShowRecurrent(false);
+      setSelectedRecurrentColumn(null);
+    }
+    setShowReference(!showReference);
+    if (showReference) {
+      // If turning off reference, clear selections
+      setSelectedReferenceSheet(null);
+      setSelectedReferenceColumn(null);
+    }
+  };
+
+  const handleRecurrentToggle = () => {
+    // console.log("Current attributes for debugging:", currentAttributes);
+    // console.log("Sample attribute structure:", currentAttributes[0]);
+    if (showReference) {
+      // If reference is active, disable it first
+      setShowReference(false);
+      setSelectedReferenceSheet(null);
+      setSelectedReferenceColumn(null);
+    }
+    setShowRecurrent(!showRecurrent);
+    if (showRecurrent) {
+      // If turning off recurrent, clear selections
+      setSelectedRecurrentColumn(null);
     }
   };
 
@@ -57,6 +132,10 @@ export const ColumnCreationForm = ({
     setIsReferenceDropdownOpen(false);
     setDerivedAdditions([]);
     setDerivedSubtractions([]);
+    setShowRecurrent(false);
+    setSelectedRecurrentColumn(null);
+    setSheetSearchTerm("");
+    setColumnSearchTerm("");
   };
 
   const handleClose = () => {
@@ -117,9 +196,50 @@ export const ColumnCreationForm = ({
 
   if (!isOpen) return null;
 
+  const getColumnTypeForDisplay = (col) => {
+    if (col.derived === true) {
+      return "Derived";
+    }
+    if (
+      col.linkedFrom?.sheetObjectId !== null &&
+      col.linkedFrom?.sheetObjectId !== undefined
+    ) {
+      return "Referenced";
+    }
+    if (col.recurrentCheck?.isRecurrent === true) {
+      return "Recurrent";
+    }
+    return "Independent";
+  };
+
+  const getColumnTypeClass = (col) => {
+    const type = getColumnTypeForDisplay(col);
+    switch (type) {
+      case "Derived":
+        return "bg-yellow-100 text-yellow-700";
+      case "Referenced":
+        return "bg-blue-100 text-blue-700";
+      case "Recurrent":
+        return "bg-purple-100 text-purple-700";
+      default:
+        return "bg-gray-100 text-gray-700";
+    }
+  };
+
+  const filteredSheetsForReference = availableSheetsForReference.filter(
+    (sheet) =>
+      sheet.sheetName.toLowerCase().includes(sheetSearchTerm.toLowerCase())
+  );
+
+  const filteredColumnsForReference = selectedReferenceSheet
+    ? selectedReferenceSheet.attributes.filter((col) =>
+        col.name.toLowerCase().includes(columnSearchTerm.toLowerCase())
+      )
+    : [];
+
   return (
     <div className="fixed inset-0 bg-black/60 bg-opacity-50 flex items-center justify-center z-50">
-      <div className="p-6 rounded-lg w-96 bg-white shadow-xl">
+      <div className="p-6 rounded-lg w-200 bg-white shadow-xl">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-gray-800">
             Create {type === "derived" ? "Derived" : "Independent"} Column
@@ -149,16 +269,39 @@ export const ColumnCreationForm = ({
         {/* Independent Column with Reference */}
         {type === "independent" && (
           <div className="mb-4">
-            {!showReference ? (
+            <div className="flex items-center justify-between mb-3">
               <button
-                onClick={() => setShowReference(true)}
-                className="flex items-center gap-2 px-3 py-2 text-sm border rounded-md text-gray-600 border-gray-300 hover:bg-gray-100"
+                onClick={handleReferenceToggle}
+                disabled={showRecurrent}
+                className={`flex items-center gap-2 px-3 py-2 text-sm border rounded-md transition-colors ${
+                  showReference
+                    ? "bg-blue-100 text-blue-700 border-blue-300"
+                    : showRecurrent
+                    ? "border-gray-200 text-gray-400 cursor-not-allowed"
+                    : "border-gray-300 text-gray-600 hover:bg-gray-100"
+                }`}
               >
                 <Plus className="w-4 h-4" />
-                Reference Column
+                {showReference ? "Remove Reference" : "Reference Column"}
               </button>
-            ) : (
-              <div className="space-y-3">
+              <button
+                onClick={handleRecurrentToggle}
+                disabled={showReference}
+                className={`flex items-center gap-2 px-3 py-2 text-sm border rounded-md transition-colors ${
+                  showRecurrent
+                    ? "bg-purple-100 text-purple-700 border-purple-300"
+                    : showReference
+                    ? "border-gray-200 text-gray-400 cursor-not-allowed"
+                    : "border-gray-300 text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                <RotateCcw className="w-4 h-4" />
+                {showRecurrent ? "Remove Recurrent" : "Add Recurrent"}
+              </button>
+            </div>
+
+            {showReference && (
+              <div className="space-y-3 p-4 bg-blue-50 rounded-lg border">
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-medium text-gray-700">
                     Reference from another sheet
@@ -173,39 +316,77 @@ export const ColumnCreationForm = ({
 
                 {/* Sheet Dropdown */}
                 <div className="relative">
-                  <button
-                    onClick={() =>
-                      setIsReferenceDropdownOpen(!isReferenceDropdownOpen)
-                    }
-                    className="flex items-center justify-between w-full px-3 py-2 border rounded-md bg-white border-gray-300 text-gray-700"
-                  >
-                    <span className="capitalize">
-                      {selectedReferenceSheet
-                        ? selectedReferenceSheet["sheetName"]
-                            .replace(/-/g, " ")
-                            .replace(/\b\w/g, (l) => l.toUpperCase())
-                        : "Select Reference Sheet"}
-                    </span>
-                    <ChevronDown className="w-4 h-4" />
-                  </button>
+                  {/* Search Input */}
+                  <div className="relative mb-2">
+                    <input
+                      type="text"
+                      placeholder="Search sheets..."
+                      value={sheetSearchTerm}
+                      onChange={(e) => setSheetSearchTerm(e.target.value)}
+                      onFocus={() => setIsReferenceDropdownOpen(true)}
+                      className="w-full px-3 py-2 pr-8 border rounded-md bg-white border-gray-300 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  </div>
 
+                  {/* Selected Sheet Display */}
+                  {selectedReferenceSheet && (
+                    <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded-md flex items-center justify-between">
+                      <span className="text-sm text-blue-800 font-medium">
+                        Selected:{" "}
+                        {selectedReferenceSheet.sheetName
+                          .replace(/-/g, " ")
+                          .replace(/\b\w/g, (l) => l.toUpperCase())}
+                      </span>
+                      <button
+                        onClick={() => {
+                          setSelectedReferenceSheet(null);
+                          setSelectedReferenceColumn(null);
+                          setSheetSearchTerm("");
+                          setColumnSearchTerm("");
+                        }}
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Dropdown List */}
                   {isReferenceDropdownOpen && (
-                    <div className="absolute top-full left-0 mt-1 w-full border rounded-md shadow-md bg-white z-10">
-                      {availableSheets.map((sheet) => (
-                        <button
-                          key={sheet["_id"]}
-                          onClick={() => {
-                            setSelectedReferenceSheet(sheet);
-                            setSelectedReferenceColumn(null);
-                            setIsReferenceDropdownOpen(false);
-                          }}
-                          className="w-full px-3 py-2 text-left hover:bg-gray-100"
-                        >
-                          {sheet["sheetName"]
-                            .replace(/-/g, " ")
-                            .replace(/\b\w/g, (l) => l.toUpperCase())}
-                        </button>
-                      ))}
+                    <div className="absolute top-full left-0 mt-1 w-full border rounded-md shadow-lg bg-white z-20 max-h-48 overflow-y-auto">
+                      {filteredSheetsForReference.length > 0 ? (
+                        filteredSheetsForReference.map((sheet) => (
+                          <button
+                            key={sheet["_id"]}
+                            onClick={() => {
+                              setSelectedReferenceSheet(sheet);
+                              setSelectedReferenceColumn(null);
+                              setIsReferenceDropdownOpen(false);
+                              setSheetSearchTerm(sheet.sheetName);
+                              setColumnSearchTerm("");
+                            }}
+                            className="w-full px-3 py-2 text-left hover:bg-gray-100 border-b border-gray-100 last:border-b-0 focus:outline-none focus:bg-blue-50"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span>
+                                {sheet["sheetName"]
+                                  .replace(/-/g, " ")
+                                  .replace(/\b\w/g, (l) => l.toUpperCase())}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                {sheet.attributes?.length || 0} columns
+                              </span>
+                            </div>
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-3 py-2 text-gray-500 text-sm">
+                          {sheetSearchTerm
+                            ? `No sheets found for "${sheetSearchTerm}"`
+                            : "No sheets available for reference"}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -213,48 +394,196 @@ export const ColumnCreationForm = ({
                 {/* Column Selection */}
                 {selectedReferenceSheet && (
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">
+                    {/* <label className="text-sm font-medium text-gray-700">
                       Select Column
-                    </label>
-                    <div className="max-h-32 overflow-y-auto border rounded-md">
-                      {selectedReferenceSheet.attributes.map((col, index) => (
+                    </label> */}
+
+                    {/* Column Search Input */}
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Search columns..."
+                        value={columnSearchTerm}
+                        onChange={(e) => setColumnSearchTerm(e.target.value)}
+                        className="w-full px-3 py-2 border rounded-md bg-white border-gray-300 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    {/* Selected Column Display */}
+                    {selectedReferenceColumn && (
+                      <div className="p-2 bg-green-50 border border-green-200 rounded-md flex items-center justify-between">
+                        <span className="text-sm text-green-800 font-medium">
+                          Selected:{" "}
+                          {selectedReferenceColumn.name
+                            .replace(/-/g, " ")
+                            .replace(/\b\w/g, (l) => l.toUpperCase())}
+                        </span>
                         <button
-                          key={index}
-                          onClick={() =>
-                            setSelectedReferenceColumn({ ...col, index })
-                          }
-                          className={`w-full px-3 py-2 text-left transition-colors ${
-                            selectedReferenceColumn?.index === index
-                              ? "bg-blue-100 text-blue-800"
-                              : "hover:bg-gray-100 text-gray-800"
-                          }`}
+                          onClick={() => {
+                            setSelectedReferenceColumn(null);
+                            setColumnSearchTerm("");
+                          }}
+                          className="text-green-600 hover:text-green-800"
                         >
-                          <div className="flex justify-between items-center">
-                            <span className="capitalize">
-                              {col.name
-                                .replace(/-/g, " ")
-                                .replace(/\b\w/g, (l) => l.toUpperCase())}
-                            </span>
-                            <span
-                              className={`text-xs px-2 py-1 rounded ${
-                                col.derived
-                                  ? "bg-yellow-100 text-yellow-700"
-                                  : col["linkedFrom"] &&
-                                    col["linkedFrom"].sheetObjectId
-                                  ? "bg-blue-100 text-blue-700"
-                                  : "bg-gray-100 text-gray-700"
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Column List */}
+                    <div className="max-h-32 overflow-y-auto border rounded-md bg-white">
+                      {filteredColumnsForReference.length > 0 ? (
+                        filteredColumnsForReference.map((col, index) => {
+                          // Find the original index in the unfiltered array
+                          const originalIndex =
+                            selectedReferenceSheet.attributes.findIndex(
+                              (attr) => attr.name === col.name
+                            );
+
+                          return (
+                            <button
+                              key={originalIndex}
+                              onClick={() => {
+                                setSelectedReferenceColumn({
+                                  ...col,
+                                  index: originalIndex,
+                                });
+                                setColumnSearchTerm(col.name);
+                              }}
+                              className={`w-full px-3 py-2 text-left transition-colors border-b border-gray-100 last:border-b-0 focus:outline-none ${
+                                selectedReferenceColumn?.index === originalIndex
+                                  ? "bg-blue-100 text-blue-800"
+                                  : "hover:bg-gray-100 text-gray-800"
                               }`}
                             >
-                              {col.derived
-                                ? "Derived"
-                                : col["linkedFrom"] &&
-                                  col["linkedFrom"].sheetObjectId
-                                ? "Referenced"
-                                : "Independent"}
+                              <div className="flex justify-between items-center">
+                                <span className="capitalize">
+                                  {col.name
+                                    .replace(/-/g, " ")
+                                    .replace(/\b\w/g, (l) => l.toUpperCase())}
+                                </span>
+                                <span
+                                  className={`text-xs px-2 py-1 rounded ${getColumnTypeClass(
+                                    col
+                                  )}`}
+                                >
+                                  {getColumnTypeForDisplay(col)}
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })
+                      ) : (
+                        <div className="px-3 py-2 text-gray-500 text-sm">
+                          {columnSearchTerm
+                            ? `No columns found for "${columnSearchTerm}"`
+                            : "No columns available"}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Reference Preview */}
+                {selectedReferenceSheet && selectedReferenceColumn && (
+                  <div className="p-3 bg-blue-100 rounded-lg">
+                    <div className="text-sm font-medium text-blue-800 mb-1">
+                      Reference Preview:
+                    </div>
+                    <div className="text-sm text-blue-700">
+                      <span className="font-medium">
+                        {columnName || "New Column"}
+                      </span>
+                      {" will reference "}
+                      <span className="font-medium">
+                        {selectedReferenceColumn.name
+                          .replace(/-/g, " ")
+                          .replace(/\b\w/g, (l) => l.toUpperCase())}
+                      </span>
+                      {" from "}
+                      <span className="font-medium">
+                        {selectedReferenceSheet.sheetName
+                          .replace(/-/g, " ")
+                          .replace(/\b\w/g, (l) => l.toUpperCase())}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {showRecurrent && (
+              <div className="space-y-4 p-4 bg-purple-50 rounded-lg border">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-gray-700">
+                    Reference Column from Current Sheet
+                  </label>
+                  <button
+                    onClick={() => setShowRecurrent(false)}
+                    className="text-gray-500 hover:text-gray-900"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="max-h-32 overflow-y-auto flex flex-col gap-2">
+                  {currentAttributes.map((col, index) => {
+                    // if (col.derived) return null;
+                    return (
+                      <button
+                        key={index}
+                        onClick={() =>
+                          setSelectedRecurrentColumn({ ...col, index })
+                        }
+                        className={`w-full px-3 py-2 rounded-md text-left transition-colors ${
+                          selectedRecurrentColumn?.index === index
+                            ? "bg-purple-200 text-purple-800 border border-purple-300"
+                            : "bg-white hover:bg-purple-50 border border-gray-200"
+                        }`}
+                      >
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <span className="font-medium capitalize">
+                              {col.name.replace(/_/g, " ").replace(/-/g, " ")}
+                            </span>
+                            {/* {col.linkedFrom?.sheetObjectId && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                Linked from external sheet
+                              </div>
+                            )} */}
+                          </div>
+                          <div className="flex gap-2">
+                            <span
+                              className={`text-xs px-2 py-1 rounded ${getColumnTypeClass(
+                                col
+                              )}`}
+                            >
+                              {getColumnTypeForDisplay(col)}
                             </span>
                           </div>
-                        </button>
-                      ))}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Recurrent Preview */}
+                {selectedRecurrentColumn && (
+                  <div className="p-3 bg-purple-100 rounded-lg">
+                    <div className="text-sm font-medium text-purple-800 mb-1">
+                      Recurrent Preview:
+                    </div>
+                    <div className="text-sm text-purple-700">
+                      <span className="font-medium">
+                        {columnName || "New Column"}
+                      </span>
+                      {" will get its value from "}
+                      <span className="font-medium">
+                        {selectedRecurrentColumn.name
+                          .replace(/_/g, " ")
+                          .replace(/-/g, " ")}
+                      </span>
+                      {" from the previous period"}
                     </div>
                   </div>
                 )}
@@ -412,6 +741,8 @@ export const ColumnUpdateForm = ({
   onSave,
   existingColumns = [],
   existingData = {},
+  availableSheets = [],
+  currentSheetId,
 }) => {
   const [columnName, setColumnName] = useState("");
   const [additionIndices, setAdditionIndices] = useState([]);
@@ -419,6 +750,17 @@ export const ColumnUpdateForm = ({
   const [reference, setReference] = useState(null);
   const [errors, setErrors] = useState({});
   const [isDerived, setIsDerived] = useState(false);
+
+  const [showReference, setShowReference] = useState(false);
+  const [selectedReferenceSheet, setSelectedReferenceSheet] = useState(null);
+  const [selectedReferenceColumn, setSelectedReferenceColumn] = useState(null);
+  const [isReferenceDropdownOpen, setIsReferenceDropdownOpen] = useState(false);
+  const [showRecurrent, setShowRecurrent] = useState(false);
+  const [selectedRecurrentColumn, setSelectedRecurrentColumn] = useState(null);
+  const [availableSheetsForReference, setAvailableSheetsForReference] =
+    useState([]);
+  const [sheetSearchTerm, setSheetSearchTerm] = useState("");
+  const [columnSearchTerm, setColumnSearchTerm] = useState("");
 
   // Initialize form with existing data
   useEffect(() => {
@@ -430,6 +772,157 @@ export const ColumnUpdateForm = ({
       setIsDerived(existingData.isDerived || false);
     }
   }, [existingData, isOpen]);
+
+  useEffect(() => {
+    const checkReferences = async () => {
+      if (currentSheetId && isOpen) {
+        try {
+          const result = await checkAvailableLinks(currentSheetId);
+          if (result.success) {
+            const filteredSheets = availableSheets.filter(
+              (sheet) => !result.unavailableSheets.includes(sheet._id)
+            );
+            setAvailableSheetsForReference(filteredSheets);
+          } else {
+            setAvailableSheetsForReference(availableSheets);
+          }
+        } catch (error) {
+          console.error("Error checking available links:", error);
+          setAvailableSheetsForReference(availableSheets);
+        }
+      } else {
+        setAvailableSheetsForReference(availableSheets);
+      }
+    };
+
+    checkReferences();
+  }, [currentSheetId, isOpen, availableSheets]);
+
+  // Initialize form with existing data
+  useEffect(() => {
+    if (existingData && isOpen) {
+      setColumnName(existingData.name || "");
+      setAdditionIndices(existingData.additionIndices || []);
+      setSubtractionIndices(existingData.subtractionIndices || []);
+      setIsDerived(existingData.isDerived || false);
+
+      // Initialize reference data
+      if (existingData.reference) {
+        setShowReference(true);
+        setReference(existingData.reference);
+        // Find and set the reference sheet and column
+        const refSheet = availableSheets.find(
+          (sheet) => sheet._id === existingData.reference.sheetId
+        );
+        if (refSheet) {
+          setSelectedReferenceSheet(refSheet);
+          const refColumn =
+            refSheet.attributes[existingData.reference.columnIndex];
+          if (refColumn) {
+            setSelectedReferenceColumn({
+              ...refColumn,
+              index: existingData.reference.columnIndex,
+            });
+            setSheetSearchTerm(refSheet.sheetName);
+            setColumnSearchTerm(refColumn.name);
+          }
+        }
+      }
+
+      // Initialize recurrent data
+      if (existingData.recurrent) {
+        setShowRecurrent(true);
+        const recurrentColumn =
+          existingColumns[existingData.recurrent.referenceColumnIndex];
+        if (recurrentColumn) {
+          setSelectedRecurrentColumn({
+            ...recurrentColumn,
+            index: existingData.recurrent.referenceColumnIndex,
+          });
+        }
+      }
+    }
+  }, [existingData, isOpen, availableSheets, existingColumns]);
+
+  // Add click outside handler
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (isReferenceDropdownOpen && !event.target.closest(".relative")) {
+        setIsReferenceDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isReferenceDropdownOpen]);
+
+  const getColumnTypeForDisplay = (col) => {
+    if (col.derived === true) return "Derived";
+    if (
+      col.linkedFrom?.sheetObjectId !== null &&
+      col.linkedFrom?.sheetObjectId !== undefined
+    )
+      return "Referenced";
+    if (col.recurrentCheck?.isRecurrent === true) return "Recurrent";
+    return "Independent";
+  };
+
+  const getColumnTypeClass = (col) => {
+    const type = getColumnTypeForDisplay(col);
+    switch (type) {
+      case "Derived":
+        return "bg-yellow-100 text-yellow-700";
+      case "Referenced":
+        return "bg-blue-100 text-blue-700";
+      case "Recurrent":
+        return "bg-purple-100 text-purple-700";
+      default:
+        return "bg-gray-100 text-gray-700";
+    }
+  };
+
+  const handleReferenceToggle = () => {
+    if (showRecurrent) {
+      setShowRecurrent(false);
+      setSelectedRecurrentColumn(null);
+    }
+    setShowReference(!showReference);
+    if (showReference) {
+      setSelectedReferenceSheet(null);
+      setSelectedReferenceColumn(null);
+      setSheetSearchTerm("");
+      setColumnSearchTerm("");
+      setReference(null);
+    }
+  };
+
+  const handleRecurrentToggle = () => {
+    if (showReference) {
+      setShowReference(false);
+      setSelectedReferenceSheet(null);
+      setSelectedReferenceColumn(null);
+      setSheetSearchTerm("");
+      setColumnSearchTerm("");
+      setReference(null);
+    }
+    setShowRecurrent(!showRecurrent);
+    if (showRecurrent) {
+      setSelectedRecurrentColumn(null);
+    }
+  };
+
+  const filteredSheetsForReference = availableSheetsForReference.filter(
+    (sheet) =>
+      sheet.sheetName.toLowerCase().includes(sheetSearchTerm.toLowerCase())
+  );
+
+  const filteredColumnsForReference = selectedReferenceSheet
+    ? selectedReferenceSheet.attributes.filter((col) =>
+        col.name.toLowerCase().includes(columnSearchTerm.toLowerCase())
+      )
+    : [];
 
   const validateForm = () => {
     const newErrors = {};
@@ -443,7 +936,6 @@ export const ColumnUpdateForm = ({
         newErrors.formula = "At least one column must be selected for formula";
       }
 
-      // Check for overlapping indices
       const overlap = additionIndices.some((idx) =>
         subtractionIndices.includes(idx)
       );
@@ -463,7 +955,21 @@ export const ColumnUpdateForm = ({
       name: columnName.trim(),
       additionIndices: isDerived ? additionIndices : [],
       subtractionIndices: isDerived ? subtractionIndices : [],
-      reference: reference,
+      reference:
+        showReference && selectedReferenceSheet && selectedReferenceColumn
+          ? {
+              sheetId: selectedReferenceSheet._id,
+              columnIndex: selectedReferenceColumn.index,
+              columnName: selectedReferenceColumn.name,
+            }
+          : null,
+      recurrent:
+        showRecurrent && selectedRecurrentColumn
+          ? {
+              referenceColumnIndex: selectedRecurrentColumn.index,
+              referenceColumnName: selectedRecurrentColumn.name,
+            }
+          : null,
     };
 
     onSave(formData);
@@ -476,6 +982,13 @@ export const ColumnUpdateForm = ({
     setReference(null);
     setErrors({});
     setIsDerived(false);
+    setShowReference(false);
+    setSelectedReferenceSheet(null);
+    setSelectedReferenceColumn(null);
+    setShowRecurrent(false);
+    setSelectedRecurrentColumn(null);
+    setSheetSearchTerm("");
+    setColumnSearchTerm("");
     onClose();
   };
 
@@ -524,7 +1037,7 @@ export const ColumnUpdateForm = ({
 
   return (
     <div className="fixed inset-0 bg-black/60 bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">Update Column</h2>
@@ -538,127 +1051,428 @@ export const ColumnUpdateForm = ({
 
         {/* Content */}
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
-          {/* Column Name */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Column Name *
-            </label>
-            <input
-              type="text"
-              value={columnName}
-              onChange={(e) => setColumnName(e.target.value)}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                errors.columnName ? "border-red-500" : "border-gray-300"
-              }`}
-              placeholder="Enter column name"
-            />
-            {errors.columnName && (
-              <p className="mt-1 text-sm text-red-600">{errors.columnName}</p>
-            )}
-          </div>
-
-          {/* Column Type Toggle */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Column Type
-            </label>
-            <div className="flex space-x-4">
-              <button
-                onClick={() => setIsDerived(false)}
-                className={`px-4 py-2 rounded-md border transition-all ${
-                  !isDerived
-                    ? "bg-blue-50 border-blue-500 text-blue-700"
-                    : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
-                }`}
-              >
-                Independent
-              </button>
-              <button
-                onClick={() => setIsDerived(true)}
-                className={`px-4 py-2 rounded-md border transition-all ${
-                  isDerived
-                    ? "bg-blue-50 border-blue-500 text-blue-700"
-                    : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
-                }`}
-              >
-                Derived (Formula)
-              </button>
-            </div>
-          </div>
-
-          {/* Formula Section - Only show if derived */}
-          {isDerived && (
-            <div className="mb-6">
-              <div className="flex items-center gap-2 mb-3">
-                <label className="block text-sm font-medium text-gray-700">
-                  Formula Configuration
+          <div className="flex items-start justify-center flex-row w-full gap-6">
+            {/* Left Column - Basic Info */}
+            <div className="w-full space-y-6">
+              {/* Column Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Column Name *
                 </label>
-                <Info className="w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={columnName}
+                  onChange={(e) => setColumnName(e.target.value)}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    errors.columnName ? "border-red-500" : "border-gray-300"
+                  }`}
+                  placeholder="Enter column name"
+                />
+                {errors.columnName && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {errors.columnName}
+                  </p>
+                )}
               </div>
 
-              {/* Formula Preview */}
-              <div className="mb-4 p-3 bg-gray-50 rounded-md">
-                <p className="text-sm text-gray-600 mb-1">Formula Preview:</p>
-                <p className="font-mono text-sm text-gray-800">
-                  {generateFormulaPreview()}
-                </p>
+              {/* Column Type Toggle */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Column Type
+                </label>
+                <div className="flex space-x-4 justify-between">
+                  <button
+                    onClick={() => setIsDerived(false)}
+                    className={`px-4 py-2 rounded-md min-w-[10rem] border transition-all ${
+                      !isDerived
+                        ? "bg-blue-50 border-blue-500 text-blue-700"
+                        : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    Independent
+                  </button>
+                  <button
+                    onClick={() => setIsDerived(true)}
+                    className={`px-4 py-2 min-w-[10rem] rounded-md border transition-all ${
+                      isDerived
+                        ? "bg-blue-50 border-blue-500 text-blue-700"
+                        : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    Derived (Formula)
+                  </button>
+                </div>
               </div>
 
-              {/* Column Selection */}
-              <div className="space-y-3">
-                <p className="text-sm text-gray-600">
-                  Select columns to include in formula:
-                </p>
-                {existingColumns.map((column, index) => {
-                  if (index === existingData.currentColumnIndex) {
-                    return null;
-                  }
-                  return (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between p-3 border border-gray-200 rounded-md"
+              {/* Reference and Recurrent Options for Independent Columns */}
+              {!isDerived && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <button
+                      onClick={handleReferenceToggle}
+                      disabled={showRecurrent}
+                      className={`flex items-center min-w-[10rem] gap-2 px-2 py-2 text-sm border rounded-md transition-colors ${
+                        showReference
+                          ? "bg-blue-100 text-blue-700 border-blue-300"
+                          : showRecurrent
+                          ? "border-gray-200 text-gray-400 cursor-not-allowed"
+                          : "border-gray-300 text-gray-600 hover:bg-gray-100"
+                      }`}
                     >
-                      <span className="text-sm font-medium text-gray-900">
-                        {column.name}
-                      </span>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() =>
-                            toggleColumnInFormula(index, "addition")
-                          }
-                          className={`flex items-center px-3 py-1 rounded text-xs font-medium transition-all ${
-                            additionIndices.includes(index)
-                              ? "bg-green-100 text-green-800 border border-green-300"
-                              : "bg-gray-100 text-gray-600 border border-gray-300 hover:bg-green-50"
-                          }`}
-                        >
-                          <Plus className="w-3 h-3 mr-1" />
-                          Add
-                        </button>
-                        <button
-                          onClick={() =>
-                            toggleColumnInFormula(index, "subtraction")
-                          }
-                          className={`flex items-center px-3 py-1 rounded text-xs font-medium transition-all ${
-                            subtractionIndices.includes(index)
-                              ? "bg-red-100 text-red-800 border border-red-300"
-                              : "bg-gray-100 text-gray-600 border border-gray-300 hover:bg-red-50"
-                          }`}
-                        >
-                          <Minus className="w-3 h-3 mr-1" />
-                          Subtract
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {errors.formula && (
-                <p className="mt-2 text-sm text-red-600">{errors.formula}</p>
+                      <Plus className="w-4 h-4" />
+                      {showReference ? "Remove Reference" : "Reference Column"}
+                    </button>
+                    <button
+                      onClick={handleRecurrentToggle}
+                      disabled={showReference}
+                      className={`flex items-center min-w-[10rem] justify-center gap-2 px-3 py-2 text-sm border rounded-md transition-colors ${
+                        showRecurrent
+                          ? "bg-purple-100 text-purple-700 border-purple-300"
+                          : showReference
+                          ? "border-gray-200 text-gray-400 cursor-not-allowed"
+                          : "border-gray-300 text-gray-600 hover:bg-gray-100"
+                      }`}
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                      {showRecurrent ? "Remove Recurrent" : "Add Recurrent"}
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
-          )}
+
+            {/* Right Column - Configuration */}
+            {(isDerived || showRecurrent || showReference) && (
+              <div className="w-full space-y-6">
+                {/* Reference Configuration */}
+                {!isDerived && showReference && (
+                  <div className="space-y-4 p-4 bg-blue-50 rounded-lg border">
+                    <h3 className="text-lg font-medium text-gray-900">
+                      Reference Configuration
+                    </h3>
+
+                    {/* Sheet Search and Selection */}
+                    <div className="relative">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Select Reference Sheet
+                      </label>
+
+                      <div className="relative mb-2">
+                        <input
+                          type="text"
+                          placeholder="Search sheets..."
+                          value={sheetSearchTerm}
+                          onChange={(e) => setSheetSearchTerm(e.target.value)}
+                          onFocus={() => setIsReferenceDropdownOpen(true)}
+                          className="w-full px-3 py-2 pr-8 border rounded-md bg-white border-gray-300 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                      </div>
+
+                      {selectedReferenceSheet && (
+                        <div className="mb-2 p-2 bg-blue-100 border border-blue-200 rounded-md flex items-center justify-between">
+                          <span className="text-sm text-blue-800 font-medium">
+                            Selected:{" "}
+                            {selectedReferenceSheet.sheetName
+                              .replace(/-/g, " ")
+                              .replace(/\b\w/g, (l) => l.toUpperCase())}
+                          </span>
+                          <button
+                            onClick={() => {
+                              setSelectedReferenceSheet(null);
+                              setSelectedReferenceColumn(null);
+                              setSheetSearchTerm("");
+                              setColumnSearchTerm("");
+                            }}
+                            className="text-blue-600 hover:text-blue-800"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+
+                      {isReferenceDropdownOpen && (
+                        <div className="absolute top-full left-0 mt-1 w-full border rounded-md shadow-lg bg-white z-20 max-h-48 overflow-y-auto">
+                          {filteredSheetsForReference.length > 0 ? (
+                            filteredSheetsForReference.map((sheet) => (
+                              <button
+                                key={sheet._id}
+                                onClick={() => {
+                                  setSelectedReferenceSheet(sheet);
+                                  setSelectedReferenceColumn(null);
+                                  setIsReferenceDropdownOpen(false);
+                                  setSheetSearchTerm(sheet.sheetName);
+                                  setColumnSearchTerm("");
+                                }}
+                                className="w-full px-3 py-2 text-left hover:bg-gray-100 border-b border-gray-100 last:border-b-0"
+                              >
+                                {sheet.sheetName
+                                  .replace(/-/g, " ")
+                                  .replace(/\b\w/g, (l) => l.toUpperCase())}
+                              </button>
+                            ))
+                          ) : (
+                            <div className="px-3 py-2 text-gray-500 text-sm">
+                              {sheetSearchTerm
+                                ? `No sheets found for "${sheetSearchTerm}"`
+                                : "No sheets available"}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Column Selection */}
+                    {selectedReferenceSheet && (
+                      <div className="space-y-2">
+                        {/* <label className="text-sm font-medium text-gray-700">
+                        Select Column
+                      </label> */}
+
+                        <div className="relative">
+                          <input
+                            type="text"
+                            placeholder="Search columns..."
+                            value={columnSearchTerm}
+                            onChange={(e) =>
+                              setColumnSearchTerm(e.target.value)
+                            }
+                            className="w-full px-3 py-2 border rounded-md bg-white border-gray-300 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+
+                        {selectedReferenceColumn && (
+                          <div className="p-2 bg-green-50 border border-green-200 rounded-md flex items-center justify-between">
+                            <span className="text-sm text-green-800 font-medium">
+                              Selected:{" "}
+                              {selectedReferenceColumn.name
+                                .replace(/-/g, " ")
+                                .replace(/\b\w/g, (l) => l.toUpperCase())}
+                            </span>
+                            <button
+                              onClick={() => {
+                                setSelectedReferenceColumn(null);
+                                setColumnSearchTerm("");
+                              }}
+                              className="text-green-600 hover:text-green-800"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
+
+                        <div className="max-h-32 overflow-y-auto border rounded-md bg-white">
+                          {filteredColumnsForReference.length > 0 ? (
+                            filteredColumnsForReference.map((col) => {
+                              const originalIndex =
+                                selectedReferenceSheet.attributes.findIndex(
+                                  (attr) => attr.name === col.name
+                                );
+                              return (
+                                <button
+                                  key={originalIndex}
+                                  onClick={() => {
+                                    setSelectedReferenceColumn({
+                                      ...col,
+                                      index: originalIndex,
+                                    });
+                                    setColumnSearchTerm(col.name);
+                                  }}
+                                  className={`w-full px-3 py-2 text-left transition-colors border-b border-gray-100 last:border-b-0 ${
+                                    selectedReferenceColumn?.index ===
+                                    originalIndex
+                                      ? "bg-blue-100 text-blue-800"
+                                      : "hover:bg-gray-100 text-gray-800"
+                                  }`}
+                                >
+                                  <div className="flex justify-between items-center">
+                                    <span className="capitalize">
+                                      {col.name
+                                        .replace(/-/g, " ")
+                                        .replace(/\b\w/g, (l) =>
+                                          l.toUpperCase()
+                                        )}
+                                    </span>
+                                    <span
+                                      className={`text-xs px-2 py-1 rounded ${getColumnTypeClass(
+                                        col
+                                      )}`}
+                                    >
+                                      {getColumnTypeForDisplay(col)}
+                                    </span>
+                                  </div>
+                                </button>
+                              );
+                            })
+                          ) : (
+                            <div className="px-3 py-2 text-gray-500 text-sm">
+                              {columnSearchTerm
+                                ? `No columns found for "${columnSearchTerm}"`
+                                : "No columns available"}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Recurrent Configuration */}
+                {!isDerived && showRecurrent && (
+                  <div className="space-y-4 p-4 bg-purple-50 rounded-lg border">
+                    <h3 className="text-lg font-medium text-gray-900">
+                      Recurrent Configuration
+                    </h3>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">
+                        Reference Column from Current Sheet
+                      </label>
+
+                      <div className="max-h-32 overflow-y-auto flex flex-col gap-2">
+                        {existingColumns.map((col, index) => {
+                          if (
+                            col.derived ||
+                            index === existingData.currentColumnIndex
+                          )
+                            return null;
+
+                          return (
+                            <button
+                              key={index}
+                              onClick={() =>
+                                setSelectedRecurrentColumn({ ...col, index })
+                              }
+                              className={`w-full px-3 py-2 rounded-md text-left transition-colors ${
+                                selectedRecurrentColumn?.index === index
+                                  ? "bg-purple-200 text-purple-800 border border-purple-300"
+                                  : "bg-white hover:bg-purple-50 border border-gray-200"
+                              }`}
+                            >
+                              <div className="flex justify-between items-center">
+                                <span className="font-medium capitalize">
+                                  {col.name
+                                    .replace(/_/g, " ")
+                                    .replace(/-/g, " ")}
+                                </span>
+                                <span
+                                  className={`text-xs px-2 py-1 rounded ${getColumnTypeClass(
+                                    col
+                                  )}`}
+                                >
+                                  {getColumnTypeForDisplay(col)}
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {selectedRecurrentColumn && (
+                        <div className="p-3 bg-purple-100 rounded-lg">
+                          <div className="text-sm font-medium text-purple-800 mb-1">
+                            Recurrent Preview:
+                          </div>
+                          <div className="text-sm text-purple-700">
+                            <span className="font-medium">
+                              {columnName || "Column"}
+                            </span>
+                            {" will get its value from "}
+                            <span className="font-medium">
+                              {selectedRecurrentColumn.name
+                                .replace(/_/g, " ")
+                                .replace(/-/g, " ")}
+                            </span>
+                            {" from the previous period"}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Formula Section - Only show if derived */}
+                {isDerived && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Formula Configuration
+                      </label>
+                      <Info className="w-4 h-4 text-gray-400" />
+                    </div>
+
+                    {/* Formula Preview */}
+                    <div className="mb-4 p-3 bg-gray-50 rounded-md">
+                      <p className="text-sm text-gray-600 mb-1">
+                        Formula Preview:
+                      </p>
+                      <p className="font-mono text-sm text-gray-800">
+                        {generateFormulaPreview()}
+                      </p>
+                    </div>
+
+                    {/* Column Selection */}
+                    <div className="space-y-3">
+                      <p className="text-sm text-gray-600">
+                        Select columns to include in formula:
+                      </p>
+                      <div className="flex flex-col overflow-y-auto max-h-[20rem] bg-gray-100/50 p-2 gap-2 rounded-xl">
+                        {existingColumns.map((column, index) => {
+                          if (index === existingData.currentColumnIndex) {
+                            return null;
+                          }
+                          return (
+                            <div
+                              key={index}
+                              className="flex items-center justify-between p-3 border border-gray-200 rounded-md hover:bg-white"
+                            >
+                              <span className="text-sm font-medium text-gray-900">
+                                {column.name}
+                              </span>
+                              <div className="flex space-x-2">
+                                <button
+                                  onClick={() =>
+                                    toggleColumnInFormula(index, "addition")
+                                  }
+                                  className={`flex items-center px-3 py-1 rounded text-xs font-medium transition-all ${
+                                    additionIndices.includes(index)
+                                      ? "bg-green-100 text-green-800 border border-green-300"
+                                      : "bg-gray-100 text-gray-600 border border-gray-300 hover:bg-green-50"
+                                  }`}
+                                >
+                                  <Plus className="w-3 h-3 mr-1" />
+                                  Add
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    toggleColumnInFormula(index, "subtraction")
+                                  }
+                                  className={`flex items-center px-3 py-1 rounded text-xs font-medium transition-all ${
+                                    subtractionIndices.includes(index)
+                                      ? "bg-red-100 text-red-800 border border-red-300"
+                                      : "bg-gray-100 text-gray-600 border border-gray-300 hover:bg-red-50"
+                                  }`}
+                                >
+                                  <Minus className="w-3 h-3 mr-1" />
+                                  Subtract
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {errors.formula && (
+                      <p className="mt-2 text-sm text-red-600">
+                        {errors.formula}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Footer */}
