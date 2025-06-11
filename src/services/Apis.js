@@ -1,3 +1,5 @@
+import Base from "antd/es/typography/Base";
+
 //All the API endpoints will be declared here and then this will be used in entire frontend to access the endpoints...
 const BaseURL = import.meta.env.VITE_API_BASE_URL;
 
@@ -31,4 +33,5 @@ export const userManagementAPIs = {
 
 export const sheetEndpoints = {
   REFERENCE_LINK_CHECK_API: BaseURL + "/v1/nodes/available-links",
+  CREATE_SHEET_API: BaseURL + "/v1/playbook/create-sheet",
 }

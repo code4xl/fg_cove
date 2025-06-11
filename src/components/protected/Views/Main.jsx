@@ -12,6 +12,7 @@ import {
 import { selectAccount } from "../../../app/DashboardSlice";
 import toast from "react-hot-toast";
 import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 
 // Updated data processing utilities for new format
 const processSheetData = (metadata, sheetsData) => {
@@ -220,6 +221,7 @@ const InfoTooltip = () => {
 // Main Application Component
 const SheetManagement = () => {
   const account = useSelector(selectAccount);
+  const navigate = useNavigate();
 
   const [timestampsData, setTimestampsData] = useState([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -2085,18 +2087,26 @@ const SheetManagement = () => {
                           )
                         )}
                       </select>
-                      <select className="border border-gray-200 rounded-md px-3 py-1.5 text-sm">
+                      {/* <select className="border border-gray-200 rounded-md px-3 py-1.5 text-sm">
                         <option>Status</option>
                       </select>
                       <select className="border border-gray-200 rounded-md px-3 py-1.5 text-sm">
                         <option>Columns</option>
-                      </select>
+                      </select> */}
                       <button
                         onClick={refreshData}
                         className="bg-blue-600 text-white px-4 py-1.5 rounded-md text-sm hover:bg-blue-700"
                       >
                         Refresh
                       </button>
+                      {isAdmin && (
+                        <button
+                        onClick={() => {navigate("/create-sheet")}}
+                        className="bg-green-700 text-white px-4 py-1.5 rounded-md text-sm hover:bg-green-600 transition-all"
+                      >
+                        New Sheet
+                      </button>
+                      )}
                     </div>
                   </div>
                 </div>
