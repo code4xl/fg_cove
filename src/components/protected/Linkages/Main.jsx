@@ -11,7 +11,6 @@ import { CustomEdge, CustomNode, generateFlowElements } from "./utils/Helper";
 import ELK from "elkjs/lib/elk.bundled.js";
 import { ReactFlowProvider, Panel, useReactFlow } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import SheetDisplay from "./SheetDisplay";
 import { isDeatailSheetBar } from "../../../app/LinkagesSlice";
 import { useSelector } from "react-redux";
 import SheetDisplayNew from "../DetailLinkages/Main";

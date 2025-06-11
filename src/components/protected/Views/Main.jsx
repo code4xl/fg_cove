@@ -635,6 +635,7 @@ const SheetManagement = () => {
 
   const handleRowClick = (rowIndex) => {
     // Only handle clicks on existing data rows (not the blank row)
+    const numRows = currentSheet.attributes[0]?.data.length || 0;
     if (rowIndex >= numRows) return;
 
     setSelectedRowIndex(rowIndex);
