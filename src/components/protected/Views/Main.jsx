@@ -266,6 +266,13 @@ const SheetManagement = () => {
   const [isEditingSheetName, setIsEditingSheetName] = useState(false);
   const [editingSheetName, setEditingSheetName] = useState("");
 
+  const shouldProcessLastRow = (sheetData) => {
+    if (!sheetData || sheetData.length === 0) return false;
+
+    const lastRow = sheetData[sheetData.length - 1];
+    return lastRow.attributes && lastRow.attributes[0] === "0";
+  };
+
   const handleSheetNameDoubleClick = () => {
     console.log("name edit..");
     setIsEditingSheetName(true);
@@ -395,6 +402,60 @@ const SheetManagement = () => {
     }
   }, [selectedYear, selectedMonth, selectedSheetId, rawMetadata.length]);
 
+  // const fetchSheetData = async (sheetId) => {
+  //   if (!sheetId) return;
+
+  //   const fetchId = currentFetchRef.current;
+  //   setLoading(true);
+
+  //   try {
+  //     console.log(
+  //       `Fetching data for sheet: ${sheetId}, year: ${selectedYear}, month: ${selectedMonth}`
+  //     );
+
+  //     const sheetData = await getSheetsData(
+  //       account?.role,
+  //       sheetId,
+  //       selectedYear,
+  //       selectedMonth
+  //     );
+
+  //     // Check if this fetch was cancelled
+  //     if (currentFetchRef.current !== fetchId) {
+  //       console.log("Fetch cancelled, ignoring response");
+  //       return;
+  //     }
+
+  //     console.log("Raw API response:", sheetData);
+
+  //     // Validate that sheetData is an array
+  //     const validData = Array.isArray(sheetData) ? sheetData : [];
+  //     console.log("Valid data to store:", validData);
+
+  //     setRawSheetsData((prev) => {
+  //       const newData = {
+  //         ...prev,
+  //         [sheetId]: validData,
+  //       };
+  //       console.log("Updated rawSheetsData:", newData);
+  //       return newData;
+  //     });
+  //   } catch (error) {
+  //     // Only handle error if fetch wasn't cancelled
+  //     if (currentFetchRef.current === fetchId) {
+  //       console.error("Error fetching sheet data:", error);
+  //       setRawSheetsData((prev) => ({
+  //         ...prev,
+  //         [sheetId]: [],
+  //       }));
+  //     }
+  //   } finally {
+  //     if (currentFetchRef.current === fetchId) {
+  //       setLoading(false);
+  //     }
+  //   }
+  // };
+
   const fetchSheetData = async (sheetId) => {
     if (!sheetId) return;
 
@@ -425,14 +486,49 @@ const SheetManagement = () => {
       const validData = Array.isArray(sheetData) ? sheetData : [];
       console.log("Valid data to store:", validData);
 
-      setRawSheetsData((prev) => {
-        const newData = {
-          ...prev,
-          [sheetId]: validData,
-        };
-        console.log("Updated rawSheetsData:", newData);
-        return newData;
-      });
+      // Process last row if it has date = "0"
+      const wasUpdated = await processLastRowWithZeroDate(validData, sheetId);
+
+      if (wasUpdated) {
+        // Refetch data after update
+        console.log("Refetching data after updating last row...");
+        const refreshedSheetData = await getSheetsData(
+          account?.role,
+          sheetId,
+          selectedYear,
+          selectedMonth
+        );
+
+        // Check if fetch was cancelled during refetch
+        if (currentFetchRef.current !== fetchId) {
+          console.log("Refetch cancelled, ignoring response");
+          return;
+        }
+
+        const refreshedValidData = Array.isArray(refreshedSheetData)
+          ? refreshedSheetData
+          : [];
+        console.log("Refreshed data after update:", refreshedValidData);
+
+        setRawSheetsData((prev) => {
+          const newData = {
+            ...prev,
+            [sheetId]: refreshedValidData,
+          };
+          console.log("Updated rawSheetsData after refresh:", newData);
+          return newData;
+        });
+      } else {
+        // No update needed, use original data
+        setRawSheetsData((prev) => {
+          const newData = {
+            ...prev,
+            [sheetId]: validData,
+          };
+          console.log("Updated rawSheetsData:", newData);
+          return newData;
+        });
+      }
     } catch (error) {
       // Only handle error if fetch wasn't cancelled
       if (currentFetchRef.current === fetchId) {
@@ -609,6 +705,21 @@ const SheetManagement = () => {
       document.removeEventListener("click", handleClickOutside);
     };
   }, [showContextMenu]);
+
+  useEffect(() => {
+    if (currentSheet && currentSheet.attributes) {
+      // Force a re-render when sheet data changes to recalculate derived values
+      const derivedColumns = currentSheet.attributes.filter(
+        (attr) => attr.derived
+      );
+      if (derivedColumns.length > 0) {
+        console.log(
+          "Recalculating derived columns:",
+          derivedColumns.map((col) => col.name)
+        );
+      }
+    }
+  }, [currentSheet, rawSheetsData]);
 
   const getColumnType = (attribute) => {
     if (attribute.derived) return "derived";
@@ -1258,7 +1369,7 @@ const SheetManagement = () => {
     const updatedCurrentSheetMeta = {
       ...currentSheetMeta,
       attributes: updatedAttributes,
-      formulaChange: [],
+      formulaChange: [selectedColumnIndex],
       nameChange: false,
     };
 
@@ -1524,6 +1635,126 @@ const SheetManagement = () => {
 
     return previousPeriodValue || "0";
   };
+  const calculateDerivedValueForDisplay = (attribute, rowIndex) => {
+    // Check if this is a derived column
+    if (!attribute.derived || !attribute.formula) {
+      return attribute.data[rowIndex] || "0";
+    }
+
+    const additionIndices = attribute.formula.additionIndices || [];
+    const subtractionIndices = attribute.formula.subtractionIndices || [];
+
+    let result = 0;
+
+    // Add values from addition indices
+    additionIndices.forEach((index) => {
+      const refAttr = currentSheet.attributes[index];
+      if (refAttr && refAttr.data[rowIndex] !== undefined) {
+        const value = parseFloat(refAttr.data[rowIndex]) || 0;
+        result += value;
+      }
+    });
+
+    // Subtract values from subtraction indices
+    subtractionIndices.forEach((index) => {
+      const refAttr = currentSheet.attributes[index];
+      if (refAttr && refAttr.data[rowIndex] !== undefined) {
+        const value = parseFloat(refAttr.data[rowIndex]) || 0;
+        result -= value;
+      }
+    });
+
+    return result;
+  };
+
+  const processLastRowWithZeroDate = async (sheetData, sheetId) => {
+    if (!sheetData || sheetData.length === 0) return false;
+
+    const lastRow = sheetData[sheetData.length - 1];
+
+    // Check if last row's first attribute (date column) is "0"
+    if (lastRow.attributes && lastRow.attributes[0] === 0) {
+      console.log("Found last row with date = 0, processing...");
+
+      // Get today's date in the correct format
+      const today = new Date();
+      const formattedDate = today.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+
+      // Create updated row array
+      const updatedRowArray = [...lastRow.attributes];
+      updatedRowArray[0] = formattedDate; // Set today's date
+
+      // Get current sheet metadata for calculations
+      const currentSheetMeta = rawMetadata.find(
+        (sheet) => sheet._id === sheetId
+      );
+      if (!currentSheetMeta) return false;
+
+      // Calculate recurrent values
+      currentSheetMeta.attributes.forEach((attr, attrIndex) => {
+        if (attr.recurrentCheck?.isRecurrent) {
+          const refIndex = attr.recurrentCheck.recurrentReferenceIndice;
+          if (refIndex !== null && sheetData.length > 1) {
+            // Get value from previous row (second last row)
+            const previousRowValue =
+              sheetData[sheetData.length - 2].attributes[refIndex];
+            updatedRowArray[attrIndex] = previousRowValue || "0";
+          }
+        }
+      });
+
+      // Calculate derived values
+      currentSheetMeta.attributes.forEach((attr, attrIndex) => {
+        if (attr.derived && attr.formula) {
+          let calculatedValue = 0;
+
+          // Add values from addition indices
+          if (attr.formula.additionIndices?.length > 0) {
+            attr.formula.additionIndices.forEach((idx) => {
+              const value = parseFloat(updatedRowArray[idx]) || 0;
+              calculatedValue += value;
+            });
+          }
+
+          // Subtract values from subtraction indices
+          if (attr.formula.subtractionIndices?.length > 0) {
+            attr.formula.subtractionIndices.forEach((idx) => {
+              const value = parseFloat(updatedRowArray[idx]) || 0;
+              calculatedValue -= value;
+            });
+          }
+
+          updatedRowArray[attrIndex] = calculatedValue;
+        }
+      });
+
+      console.log("Updated row array with calculations:", updatedRowArray);
+
+      // Call update API
+      try {
+        const targetDate = lastRow.createdAt;
+        const rowIndex = sheetData.length - 1;
+
+        await updateRowData(sheetId, {
+          rowIndex: rowIndex,
+          attributes: updatedRowArray,
+          targetDate: targetDate,
+        });
+
+        console.log("Successfully updated last row with date 0");
+        return true; // Indicate that update was performed
+      } catch (error) {
+        console.error("Error updating last row with date 0:", error);
+        return false;
+      }
+    }
+
+    return false; // No update needed
+  };
 
   const renderTable = () => {
     if (loading || !currentSheet || processedData.length === 0) {
@@ -1565,15 +1796,53 @@ const SheetManagement = () => {
     rows.push(blankRow);
 
     // Calculate totals row
+    // const totalsRow = currentSheet.attributes.map((attr, cellIndex) => {
+    //   const columnType = getColumnType(attr);
+    //   if (attr.name.toLowerCase() === "date") return "Total";
+
+    //   if (
+    //     columnType === "derived" ||
+    //     columnType === "normal" ||
+    //     columnType === "referenced"
+    //   ) {
+    //     let total = 0;
+    //     for (let i = 0; i < numRows; i++) {
+    //       const value = attr.data[i] || 0;
+    //       if (typeof value === "number") {
+    //         total += value;
+    //       }
+    //     }
+    //     return total;
+    //   } else if (columnType === "recurrent") {
+    //     // Calculate total for recurrent columns using calculated values
+    //     let total = 0;
+    //     for (let i = 0; i < numRows; i++) {
+    //       const value = calculateRecurrentValue(attr, cellIndex, i);
+    //       const numValue = parseFloat(value) || 0;
+    //       if (!isNaN(numValue)) {
+    //         total += numValue;
+    //       }
+    //     }
+    //     return total;
+    //   }
+    //   return "";
+    // });
     const totalsRow = currentSheet.attributes.map((attr, cellIndex) => {
       const columnType = getColumnType(attr);
       if (attr.name.toLowerCase() === "date") return "Total";
 
-      if (
-        columnType === "derived" ||
-        columnType === "normal" ||
-        columnType === "referenced"
-      ) {
+      if (columnType === "derived") {
+        // Calculate total for derived columns using calculated values
+        let total = 0;
+        for (let i = 0; i < numRows; i++) {
+          const value = calculateDerivedValueForDisplay(attr, i);
+          const numValue = parseFloat(value) || 0;
+          if (!isNaN(numValue)) {
+            total += numValue;
+          }
+        }
+        return total;
+      } else if (columnType === "normal" || columnType === "referenced") {
         let total = 0;
         for (let i = 0; i < numRows; i++) {
           const value = attr.data[i] || 0;
@@ -1734,20 +2003,33 @@ const SheetManagement = () => {
                               columnType === "recurrent")
                               ? "--"
                               : (() => {
-                                  // Calculate the display value based on column type
                                   const attr =
                                     currentSheet.attributes[cellIndex];
                                   let displayValue;
 
-                                  if (columnType === "recurrent") {
-                                    displayValue = calculateRecurrentValue(
-                                      attr,
-                                      cellIndex,
-                                      rowIndex
-                                    );
-                                  } else {
-                                    displayValue = cell;
-                                  }
+                                  // if (columnType === "recurrent") {
+                                  //   displayValue = calculateRecurrentValue(
+                                  //     attr,
+                                  //     cellIndex,
+                                  //     rowIndex
+                                  //   );
+                                  // } else if (columnType === "derived") {
+                                  //   displayValue =
+                                  //     calculateDerivedValueForDisplay(
+                                  //       attr,
+                                  //       rowIndex
+                                  //     );
+                                  // } else {
+                                  //   displayValue = cell;
+                                  // }
+                                  displayValue = cell;
+
+                                  // if (typeof displayValue === "number") {
+                                  //   displayValue =
+                                  //     displayValue % 1 === 0
+                                  //       ? displayValue.toString()
+                                  //       : displayValue.toFixed(2);
+                                  // }
 
                                   return (
                                     displayValue ||
@@ -1755,7 +2037,7 @@ const SheetManagement = () => {
                                       ? checkTodaysData()
                                         ? "Data complete"
                                         : "Click to enter today's data"
-                                      : "")
+                                      : "0")
                                   );
                                 })()}
                           </div>
@@ -1775,6 +2057,36 @@ const SheetManagement = () => {
                   </td>
                 ))}
               </tr>
+              {/* <tr className="bg-gray-800 text-white font-semibold">
+                {totalsRow.map((total, index) => {
+                  const attr = currentSheet.attributes[index];
+                  const columnType = getColumnType(attr);
+
+                  // Format the total value for display
+                  let displayTotal = total;
+                  if (typeof total === "number" && total !== 0) {
+                    displayTotal =
+                      total % 1 === 0 ? total.toString() : total.toFixed(2);
+                  }
+
+                  return (
+                    <td
+                      key={index}
+                      className={`px-4 py-3 text-center text-sm font-bold ${
+                        columnType === "derived"
+                          ? "bg-yellow-600 text-yellow-100"
+                          : columnType === "referenced"
+                          ? "bg-gray-600 text-gray-100"
+                          : columnType === "recurrent"
+                          ? "bg-purple-600 text-purple-100"
+                          : "bg-gray-800 text-white"
+                      }`}
+                    >
+                      {displayTotal}
+                    </td>
+                  );
+                })}
+              </tr> */}
             </tbody>
           </table>
           {isAdmin && (
@@ -2026,12 +2338,24 @@ const SheetManagement = () => {
           <p className="text-gray-500">
             No sheets found. Please check your permissions.
           </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-          >
-            Refresh
-          </button>
+          <div className="flex items-center justify-center">
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+            >
+              Refresh
+            </button>
+            {isAdmin && (
+              <button
+                onClick={() => {
+                  navigate("/create-sheet");
+                }}
+                className="bg-green-700 text-white px-4 py-1.5 rounded-md text-sm hover:bg-green-600 transition-all"
+              >
+                New Sheet
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );

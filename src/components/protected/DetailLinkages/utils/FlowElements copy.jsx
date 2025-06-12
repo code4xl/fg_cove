@@ -30,8 +30,6 @@ import {
   Info,
   Plus,
   Minus,
-  Eye,
-  EyeOff,
 } from "lucide-react";
 import {
   getColumnType,
@@ -210,19 +208,7 @@ export const EnhancedAttributeNode = ({ data }) => {
   return (
     <div
       className={`min-w-[320px] z-30 bg-white ${styles.borderColor} border-2 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300`}
-      onMouseEnter={() => {
-        // Only show edges when hovering derived nodes
-        if (type === "derived") {
-          data.onNodeHover?.(index);
-        }
-      }}
-      onMouseLeave={() => {
-        if (type === "derived") {
-          data.onNodeHover?.(null);
-        }
-      }}
     >
-      {/* Rest of your existing JSX remains the same */}
       {/* Header */}
       <div className={`${styles.headerBg} text-white px-4 py-3 rounded-t-xl`}>
         <div className="flex items-center justify-between">
@@ -253,7 +239,7 @@ export const EnhancedAttributeNode = ({ data }) => {
         </div>
       </div>
 
-      {/* Content - keep all your existing content JSX */}
+      {/* Content */}
       <div className={`${styles.bgColor} px-4 py-3 rounded-b-xl`}>
         {/* Value Display/Input */}
         <div className="mb-3">
@@ -306,9 +292,7 @@ export const EnhancedAttributeNode = ({ data }) => {
             )}
 
             {!showTotals && type === "derived" && formula && (
-              <div className="text-xs text-gray-600">
-                Formula Applied • Hover to see connections
-              </div>
+              <div className="text-xs text-gray-600">Formula Applied</div>
             )}
 
             {!showTotals &&
@@ -321,7 +305,7 @@ export const EnhancedAttributeNode = ({ data }) => {
           </div>
         </div>
 
-        {/* Keep all your existing formula details and status indicators */}
+        {/* Formula Details for Derived Fields */}
         {!showTotals && type === "derived" && formula && (
           <div className="border-t border-purple-200 pt-2">
             <div className="text-xs text-gray-700 mb-1 font-medium">
@@ -538,13 +522,10 @@ export const FormulaEdge = ({
   );
 };
 
-// Replace the existing function with this (around line 420):
 export function generateEnhancedAttributeFlowElements(
   attributes,
   sheetData,
-  showTotals = false,
-  hoveredNode = null,
-  showAllConnections = false
+  showTotals = false
 ) {
   if (!attributes || !Array.isArray(attributes)) {
     return { nodes: [], edges: [] };
@@ -556,30 +537,13 @@ export function generateEnhancedAttributeFlowElements(
   const hasToday = checkTodaysData(sheetData);
   const todayColumnIndex = getTodaysColumnIndex(sheetData);
 
-  // Sort attributes to put derived nodes at bottom
-  const sortedAttributes = attributes
-    .map((attr, originalIndex) => ({
-      ...attr,
-      originalIndex,
-    }))
-    .sort((a, b) => {
-      // Independent/linked/recurrent first, derived last
-      if (a.derived && !b.derived) return 1;
-      if (!a.derived && b.derived) return -1;
-      return 0;
-    });
-
-  const nonDerivedNodes = sortedAttributes.filter((attr) => !attr.derived);
-  const derivedNodes = sortedAttributes.filter((attr) => attr.derived);
-
   // Create nodes for each attribute
-  sortedAttributes.forEach((attr, sortedIndex) => {
+  attributes.forEach((attr, index) => {
     const nodeType = determineNodeType(attr);
     let currentValue = null;
-    const originalIndex = attr.originalIndex;
 
     // Get today's value if available
-    if (hasToday && todayColumnIndex >= 0 && sheetData[originalIndex]) {
+    if (hasToday && todayColumnIndex >= 0 && sheetData[index]) {
       if (attr.derived && attr.formula) {
         currentValue = calculateDerivedValue(
           attr.formula,
@@ -587,7 +551,7 @@ export function generateEnhancedAttributeFlowElements(
           todayColumnIndex
         );
       } else {
-        currentValue = sheetData[originalIndex].attributes[todayColumnIndex];
+        currentValue = sheetData[index].attributes[todayColumnIndex];
       }
     }
 
@@ -599,34 +563,13 @@ export function generateEnhancedAttributeFlowElements(
         todayColumnIndex
       );
     }
-    let positionIndex;
-    let yPosition;
-    let xPosition;
-
-    if (nodeType === "derived") {
-      xPosition = 100 + (positionIndex % 4) * 340;
-    }else{
-      xPosition = 100 + (positionIndex % 4) * 340;
-    }
-
-    if (nodeType === "derived") {
-      positionIndex = derivedNodes.findIndex(
-        (node) => node.originalIndex === originalIndex
-      );
-      yPosition = 700 + Math.floor(positionIndex / 4) * 300; // Derived nodes at bottom
-    } else {
-      positionIndex = nonDerivedNodes.findIndex(
-        (node) => node.originalIndex === originalIndex
-      );
-      yPosition = 100 + Math.floor(positionIndex / 4) * 280; // Non-derived nodes at top
-    }
 
     nodes.push({
-      id: `attr-${originalIndex}`,
+      id: `attr-${index}`,
       type: "enhancedAttributeNode",
       position: {
-        x: 100 + (positionIndex % 4) * 340,
-        y: yPosition,
+        x: 100 + (index % 3) * 360,
+        y: 100 + Math.floor(index / 3) * 250,
       },
       data: {
         name: attr.name,
@@ -636,7 +579,7 @@ export function generateEnhancedAttributeFlowElements(
         recurrentCheck: attr.recurrentCheck,
         formula: attr.formula,
         value: currentValue,
-        index: originalIndex,
+        index: index,
         hasToday,
         sheetData,
         todayColumnIndex,
@@ -648,17 +591,13 @@ export function generateEnhancedAttributeFlowElements(
     });
   });
 
-  // Create edges based on formulas - only show if hoveredNode matches
+  // Create edges based on formulas
   attributes.forEach((attr, targetIndex) => {
     if (attr.derived && attr.formula) {
-      // Show edges when hovering over this derived node OR when showAllConnections is true
-      const shouldShowEdges = showAllConnections || hoveredNode === targetIndex;
-
       // Addition edges (green)
       if (
         attr.formula.additionIndices &&
-        attr.formula.additionIndices.length > 0 &&
-        shouldShowEdges
+        attr.formula.additionIndices.length > 0
       ) {
         attr.formula.additionIndices.forEach((sourceIndex) => {
           if (sourceIndex < attributes.length) {
@@ -668,7 +607,6 @@ export function generateEnhancedAttributeFlowElements(
               target: `attr-${targetIndex}`,
               type: "formulaEdge",
               animated: true,
-              style: { opacity: 1 }, // Fully visible when shown
               data: {
                 operation: "addition",
                 sourceColumn: attributes[sourceIndex]?.name,
@@ -684,8 +622,7 @@ export function generateEnhancedAttributeFlowElements(
       // Subtraction edges (red)
       if (
         attr.formula.subtractionIndices &&
-        attr.formula.subtractionIndices.length > 0 &&
-        shouldShowEdges
+        attr.formula.subtractionIndices.length > 0
       ) {
         attr.formula.subtractionIndices.forEach((sourceIndex) => {
           if (sourceIndex < attributes.length) {
@@ -695,7 +632,6 @@ export function generateEnhancedAttributeFlowElements(
               target: `attr-${targetIndex}`,
               type: "formulaEdge",
               animated: true,
-              style: { opacity: 1 }, // Fully visible when shown
               data: {
                 operation: "subtraction",
                 sourceColumn: attributes[sourceIndex]?.name,
@@ -709,7 +645,7 @@ export function generateEnhancedAttributeFlowElements(
       }
     }
 
-    // Recurrent edges - always show these
+    // Create edges for recurrent relationships
     if (
       attr.recurrentCheck?.isRecurrent &&
       attr.recurrentCheck?.recurrentReferenceIndice !== null
@@ -722,7 +658,6 @@ export function generateEnhancedAttributeFlowElements(
           target: `attr-${targetIndex}`,
           type: "formulaEdge",
           animated: true,
-          style: { opacity: 0.3 }, // Always visible but dimmed
           data: {
             operation: "recurrent",
             sourceColumn: attributes[refIndex]?.name,
@@ -761,113 +696,78 @@ export const SheetDisplayControls = ({
   onRefresh,
   isSaving = false,
   onCreateNode,
-  showAllConnections = false,
-  onToggleConnections,
 }) => {
   const isAdmin = useSelector(selectAccount)?.role === "admin";
-  const [expand, setExpand] = useState(false);
-  const handleToggle = () => {
-    setExpand(!expand);
-  };
-
   return (
     <Panel position="top-right">
       <div className="flex flex-col gap-2 bg-white rounded-lg shadow-lg border border-gray-200 p-2">
-        <div className="flex w-full items-center justify-center">
-          <button
-            onClick={handleToggle}
-            className={`flex w-full items-center gap-2 px-3 py-2 rounded-md text-sm font-medium ${
-              expand
-                ? "bg-red-500 text-white hover:bg-red-600"
-                : "bg-indigo-500 text-white hover:bg-indigo-600"
-            }  transition-colors`}
-          >
-            {expand ? <EyeOff size={16} /> : <Eye size={16} />}
-            {expand ? "Hide Controls" : "Show Controls"}
-          </button>
-        </div>
-        {expand && (
+        {isAdmin && (
           <>
-            {isAdmin && (
-              <>
-                <div className="text-xs font-medium text-gray-600 px-2 py-1 border-b border-gray-200">
-                  Admin Controls
-                </div>
-                <button
-                  onClick={onCreateNode}
-                  className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
-                >
-                  <Plus size={16} />
-                  Create Node
-                </button>
-                <div className="border-b border-gray-200 my-1"></div>
-              </>
-            )}
-
-            {/* Today's Data Status */}
-            <div
-              className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm ${
-                hasToday
-                  ? "bg-green-50 text-green-700 border border-green-200"
-                  : "bg-amber-50 text-amber-700 border border-amber-200"
-              }`}
-            >
-              <Calendar size={16} />
-              <span className="font-medium">
-                {hasToday ? "Today's data available" : "No today's data"}
-              </span>
+            <div className="text-xs font-medium text-gray-600 px-2 py-1 border-b border-gray-200">
+              Admin Controls
             </div>
-
-            {/* Show All Connections Checkbox */}
-            <label className="flex items-center gap-2 px-3 py-2 rounded-md font-medium bg-gray-100 hover:bg-gray-200 cursor-pointer transition-colors">
-              <input
-                type="checkbox"
-                checked={showAllConnections}
-                onChange={onToggleConnections}
-                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
-              />
-              <span className="font-medium text-sm">Show All Connections</span>
-            </label>
-
-            {/* Toggle Totals Button */}
             <button
-              onClick={onToggleTotals}
-              className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                showTotals
-                  ? "bg-blue-600 text-white hover:bg-blue-700"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
+              onClick={onCreateNode}
+              className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
             >
-              <BarChart3 size={16} />
-              {showTotals ? "Hide Totals" : "Show Totals"}
+              <Plus size={16} />
+              Create Node
             </button>
-
-            {/* Save Data Button - only show if no today's data */}
-            {!hasToday && (
-              <button
-                onClick={onSaveData}
-                disabled={isSaving}
-                className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {isSaving ? (
-                  <RefreshCw size={16} className="animate-spin" />
-                ) : (
-                  <Save size={16} />
-                )}
-                {isSaving ? "Saving..." : "Save Today's Data"}
-              </button>
-            )}
-
-            {/* Refresh Button */}
-            <button
-              onClick={onRefresh}
-              className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-gray-600 text-white hover:bg-gray-700 transition-colors"
-            >
-              <RefreshCw size={16} />
-              Refresh
-            </button>
+            <div className="border-b border-gray-200 my-1"></div>
           </>
         )}
+        {/* Today's Data Status */}
+        <div
+          className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm ${
+            hasToday
+              ? "bg-green-50 text-green-700 border border-green-200"
+              : "bg-amber-50 text-amber-700 border border-amber-200"
+          }`}
+        >
+          <Calendar size={16} />
+          <span className="font-medium">
+            {hasToday ? "Today's data available" : "No today's data"}
+          </span>
+        </div>
+
+        {/* Toggle Totals Button */}
+        <button
+          onClick={onToggleTotals}
+          className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+            showTotals
+              ? "bg-blue-600 text-white hover:bg-blue-700"
+              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+          }`}
+        >
+          <BarChart3 size={16} />
+          {showTotals ? "Hide Totals" : "Show Totals"}
+        </button>
+
+        {/* Save Data Button - only show if no today's data */}
+        {!hasToday && (
+          <button
+            onClick={onSaveData}
+            disabled={isSaving}
+            className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isSaving ? (
+              <RefreshCw size={16} className="animate-spin" />
+            ) : (
+              <Save size={16} />
+            )}
+            {isSaving ? "Saving..." : "Save Today's Data"}
+          </button>
+        )}
+
+        {/* Refresh Button */}
+        <button
+          onClick={onRefresh}
+          className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-gray-600 text-white hover:bg-gray-700 transition-colors"
+        >
+          <RefreshCw size={16} />
+          Refresh
+        </button>
+
         {/* Legend */}
         <div className="border-t border-gray-200 pt-2 mt-2">
           <div className="text-xs text-gray-600 font-medium mb-2">Legend:</div>
@@ -957,23 +857,12 @@ export const AttributeFlowChart = ({
   const { getLayoutedElements } = useLayoutedElements();
   const isAdmin = useSelector(selectAccount)?.role === "admin";
 
-  const [hoveredNode, setHoveredNode] = useState(null);
-  const [showAllConnections, setShowAllConnections] = useState(false);
-  const handleNodeHover = useCallback((nodeIndex) => {
-    setHoveredNode(nodeIndex);
-  }, []);
-  const handleToggleConnections = useCallback(() => {
-    setShowAllConnections((prev) => !prev);
-  }, []);
-
   // Generate flow elements with enhanced data
   const { nodes: initialNodes, edges: initialEdges } = useMemo(() => {
     const elements = generateEnhancedAttributeFlowElements(
       attributes,
       sheetData,
-      showTotals,
-      hoveredNode,
-      showAllConnections
+      showTotals
     );
 
     // Update nodes with the onValueUpdate callback
@@ -982,20 +871,11 @@ export const AttributeFlowChart = ({
       data: {
         ...node.data,
         onValueUpdate,
-        onNodeHover: handleNodeHover,
       },
     }));
 
     return { nodes: enhancedNodes, edges: elements.edges };
-  }, [
-    attributes,
-    sheetData,
-    showTotals,
-    onValueUpdate,
-    hoveredNode,
-    handleNodeHover,
-    showAllConnections,
-  ]);
+  }, [attributes, sheetData, showTotals, onValueUpdate]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -1019,9 +899,7 @@ export const AttributeFlowChart = ({
     const { nodes: newNodes } = generateEnhancedAttributeFlowElements(
       attributes,
       sheetData,
-      showTotals,
-      hoveredNode,
-      showAllConnections
+      showTotals
     );
 
     // Preserve existing positions when updating nodes
@@ -1033,39 +911,35 @@ export const AttributeFlowChart = ({
         data: {
           ...newNode.data,
           onValueUpdate,
-          onNodeHover: handleNodeHover,
         },
       };
     });
 
     setNodes(enhancedNodes);
-  }, [
-    attributes,
-    sheetData,
-    showTotals,
-    onValueUpdate,
-    hoveredNode,
-    handleNodeHover,
-    showAllConnections,
-  ]);
+  }, [attributes, sheetData, showTotals, onValueUpdate]);
 
   useEffect(() => {
-    const { edges: newEdges } = generateEnhancedAttributeFlowElements(
+    const { nodes: newNodes } = generateEnhancedAttributeFlowElements(
       attributes,
       sheetData,
-      showTotals,
-      hoveredNode,
-      showAllConnections
+      showTotals
     );
-    setEdges(newEdges);
-  }, [
-    hoveredNode,
-    attributes,
-    sheetData,
-    showTotals,
-    setEdges,
-    showAllConnections,
-  ]);
+
+    // Preserve existing positions when updating nodes
+    const enhancedNodes = newNodes.map((newNode) => {
+      const existingNode = nodes.find((n) => n.id === newNode.id);
+      return {
+        ...newNode,
+        position: existingNode ? existingNode.position : newNode.position, // Keep existing position
+        data: {
+          ...newNode.data,
+          onValueUpdate,
+        },
+      };
+    });
+
+    setNodes(enhancedNodes);
+  }, [attributes, sheetData, showTotals, onValueUpdate]);
 
   useEffect(() => {
     getLayoutedElements({
@@ -1089,13 +963,13 @@ export const AttributeFlowChart = ({
         fitView
         fitViewOptions={{ padding: 1.5 }}
         className="bg-gray-50"
-        panOnDrag={true}
-        zoomOnScroll={true}
-        zoomOnPinch={true}
-        panOnScroll={true}
+        panOnDrag={false}
+        zoomOnScroll={false}
+        zoomOnPinch={false}
+        panOnScroll={false}
         nodesDraggable={true}
         nodesConnectable={false}
-        elementsSelectable={true}
+        elementsSelectable={false}
       >
         <Background variant="dots" gap={20} size={1} color="#e5e7eb" />
         <Controls
@@ -1123,8 +997,6 @@ export const AttributeFlowChart = ({
           isSaving={isSaving}
           isAdmin={isAdmin}
           onCreateNode={onCreateNode}
-          showAllConnections={showAllConnections}
-          onToggleConnections={handleToggleConnections}
         />
       </ReactFlow>
     </div>
