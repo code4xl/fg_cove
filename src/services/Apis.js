@@ -29,6 +29,9 @@ export const userManagementAPIs = {
   UPDATE_USER_INFO_API: BaseURL + "/v1/user/update-information",
   REVOKE_ACCESS_API: BaseURL + "/v1/user/revoke-access",
   ALL_USERS_API: BaseURL + "/v1/user/all-users",
+
+  ADMIN_SIGNUP_API: BaseURL + "/v1/admin/signup",
+  ADMIN_INFO_UPLOAD_API: BaseURL + "/v1/admin/upload-information"
 };
 
 export const sheetEndpoints = {

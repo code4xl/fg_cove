@@ -1332,7 +1332,7 @@ export const ColumnUpdateForm = ({
                       <div className="max-h-32 overflow-y-auto flex flex-col gap-2">
                         {existingColumns.map((col, index) => {
                           if (
-                            col.derived ||
+                            // col.derived ||
                             index === existingData.currentColumnIndex
                           )
                             return null;
@@ -1494,4 +1494,90 @@ export const ColumnUpdateForm = ({
       </div>
     </div>
   );
+};
+
+export const processLastRowWithZeroDate = async (sheetData, sheetId) => {
+  if (!sheetData || sheetData.length === 0) return false;
+  
+  const lastRow = sheetData[sheetData.length - 1];
+  
+  // Check if last row's first attribute (date column) is "0"
+  if (lastRow.attributes && lastRow.attributes[0] === "0") {
+    console.log("Found last row with date = 0, processing...");
+    
+    // Get today's date in the correct format
+    const today = new Date();
+    const formattedDate = today.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+    
+    // Create updated row array
+    const updatedRowArray = [...lastRow.attributes];
+    updatedRowArray[0] = formattedDate; // Set today's date
+    
+    // Get current sheet metadata for calculations
+    const currentSheetMeta = rawMetadata.find(sheet => sheet._id === sheetId);
+    if (!currentSheetMeta) return false;
+    
+    // Calculate recurrent values
+    currentSheetMeta.attributes.forEach((attr, attrIndex) => {
+      if (attr.recurrentCheck?.isRecurrent) {
+        const refIndex = attr.recurrentCheck.recurrentReferenceIndice;
+        if (refIndex !== null && sheetData.length > 1) {
+          // Get value from previous row (second last row)
+          const previousRowValue = sheetData[sheetData.length - 2].attributes[refIndex];
+          updatedRowArray[attrIndex] = previousRowValue || "0";
+        }
+      }
+    });
+    
+    // Calculate derived values
+    currentSheetMeta.attributes.forEach((attr, attrIndex) => {
+      if (attr.derived && attr.formula) {
+        let calculatedValue = 0;
+        
+        // Add values from addition indices
+        if (attr.formula.additionIndices?.length > 0) {
+          attr.formula.additionIndices.forEach((idx) => {
+            const value = parseFloat(updatedRowArray[idx]) || 0;
+            calculatedValue += value;
+          });
+        }
+        
+        // Subtract values from subtraction indices
+        if (attr.formula.subtractionIndices?.length > 0) {
+          attr.formula.subtractionIndices.forEach((idx) => {
+            const value = parseFloat(updatedRowArray[idx]) || 0;
+            calculatedValue -= value;
+          });
+        }
+        
+        updatedRowArray[attrIndex] = calculatedValue;
+      }
+    });
+    
+    console.log("Updated row array with calculations:", updatedRowArray);
+    
+    // Call update API
+    try {
+      const targetDate = lastRow.createdAt;
+      const rowIndex = sheetData.length - 1;
+      
+      await updateRowData(sheetId, {
+        rowIndex: rowIndex,
+        attributes: updatedRowArray,
+        targetDate: targetDate,
+      });
+      
+      console.log("Successfully updated last row with date 0");
+      return true; // Indicate that update was performed
+    } catch (error) {
+      console.error("Error updating last row with date 0:", error);
+      return false;
+    }
+  }
+  
+  return false; // No update needed
 };

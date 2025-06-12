@@ -393,11 +393,11 @@ const LinkagesFlow = () => {
           fitView
           fitViewOptions={{ padding: 0.5 }}
           className="bg-gray-50 relative"
-          panOnDrag={false}
-          zoomOnScroll={false}
-          zoomOnPinch={false}
-          panOnScroll={false}
-          nodesDraggable={false}
+          panOnDrag={true}
+          zoomOnScroll={true}
+          zoomOnPinch={true}
+          panOnScroll={true}
+          nodesDraggable={true}
           nodesConnectable={false}
           elementsSelectable={true}
           defaultEdgeOptions={{
