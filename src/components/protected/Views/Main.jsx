@@ -2336,12 +2336,12 @@ const SheetManagement = () => {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <p className="text-gray-500">
-            No sheets found. Please check your permissions.
+            No sheets found.
           </p>
-          <div className="flex items-center justify-center">
+          <div className="flex items-center justify-center mt-4 gap-2">
             <button
               onClick={() => window.location.reload()}
-              className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+              className=" bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
             >
               Refresh
             </button>
@@ -2350,7 +2350,7 @@ const SheetManagement = () => {
                 onClick={() => {
                   navigate("/create-sheet");
                 }}
-                className="bg-green-700 text-white px-4 py-1.5 rounded-md text-sm hover:bg-green-600 transition-all"
+                className="bg-green-700 text-white px-4 py-2 rounded-md hover:bg-green-600 transition-all"
               >
                 New Sheet
               </button>
