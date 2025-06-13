@@ -25,6 +25,7 @@ import {
   updateMetas,
 } from "../../../services/repository/sheetsRepo.js";
 import toast from "react-hot-toast";
+import { ColumnCreationForm } from "../Views/utils/Helper.jsx";
 
 const SheetDisplayNew = ({ isOpen }) => {
   const dispatch = useDispatch();
@@ -338,7 +339,7 @@ const SheetDisplayNew = ({ isOpen }) => {
         ${isOpen ? "translate-x-0 opacity-100" : "translate-x-full opacity-0"}
         fixed inset-y-0 right-0 h-full
         transition-all duration-300 ease-in-out
-        w-[calc(100vw-20rem)] min-w-[800px]
+        w-[calc(100vw-5rem)] min-w-[800px]
         bg-white border-l border-gray-200
         flex flex-col
         shadow-2xl z-50
@@ -398,6 +399,14 @@ const SheetDisplayNew = ({ isOpen }) => {
                 attributes={sheetAttributes}
                 availableSheets={availableMetadata}
               />
+              // <ColumnCreationForm
+              //   isOpen={showNodeCreationModal}
+              //   onClose={() => setShowNodeCreationModal(false)}
+              //   onSave={handleSaveNode}
+              //   type="independent"
+              //   sheets={[{attributes:sheetAttributes, _id: sheetId}]}
+              //   currentSheetId={sheetId}
+              // />
             )}
 
             {/* Loading Overlay */}
