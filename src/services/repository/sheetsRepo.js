@@ -66,14 +66,14 @@ export async function getSheetsData(login_role, sheetId, year, month) {
   }
 }
 
-export async function insertTodaysData(sheetId, data) {
+export async function insertTodaysData(sheetId, data, subRows, subRowsClosing) {
   const loadingToast = toast.loading("Inserting Today's Data...");
 
   try {
     const response = await apiConnector(
       "POST",
       `${INSERT_TODAY_API}/${sheetId}`,
-      { attributes: data }
+      { attributes: data, subrows: subRows, closingsubrows: subRowsClosing }
     );
     console.log("Insert Today's Data API response: ", response);
 
@@ -151,6 +151,7 @@ export async function updateMetas(sheetId, data, action) {
 }
 
 export async function updateRowData(sheetId, data) {
+  console.log("heyyyy...updaterowdata function repo...", data);
   const loadingToast = toast.loading("Updating row data...");
 
   try {
