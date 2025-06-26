@@ -8,6 +8,7 @@ import NavBar from './components/protected/Dashboard/NavBar';
 import Sidebar from './components/utils/Sidebar';
 import Dashboard from './components/protected/Dashboard/Dashboard';
 import ViewSheets from './components/protected/Views/Main';
+import ViewSheetsNew from './components/protected/Views/Main_New';
 // import SheetDisplay from './components/protected/Linkages/SheetDisplay';
 import PageNotFound from './components/common/PageNotFound';
 import Linkages from './components/protected/Linkages/Main';
@@ -69,6 +70,7 @@ const RoutesConfig = () => {
             
             <Route path="/create-sheet" element={<CreateSheet />} />
             <Route path="/sheets" element={<ViewSheets />} />
+            <Route path="/sheets-new" element={<ViewSheetsNew />} />
             <Route path="/linkages" element={<Linkages />} />
             <Route path="/user-control" element={<UserControl />} />
           </Routes>

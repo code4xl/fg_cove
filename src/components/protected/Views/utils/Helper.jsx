@@ -1,5 +1,13 @@
 import { useState, useEffect } from "react";
-import { X, Plus, ChevronDown, Minus, Info, RotateCcw } from "lucide-react";
+import {
+  X,
+  Plus,
+  ChevronDown,
+  Minus,
+  Info,
+  RotateCcw,
+  Trash2,
+} from "lucide-react";
 import { checkAvailableLinks } from "../../../../services/repository/sheetsRepo";
 
 export const ColumnCreationForm = ({
@@ -24,6 +32,12 @@ export const ColumnCreationForm = ({
     useState([]);
   const [sheetSearchTerm, setSheetSearchTerm] = useState("");
   const [columnSearchTerm, setColumnSearchTerm] = useState("");
+
+  const [showSubrows, setShowSubrows] = useState(false);
+  const [subrowColumns, setSubrowColumns] = useState([]);
+  const [aggregateField, setAggregateField] = useState("");
+  const [aggregationType, setAggregationType] = useState("sum");
+  const [subrowsEnabled, setSubrowsEnabled] = useState(true);
 
   // Get available sheets (excluding current sheet) from processed data
   const availableSheets = sheets.filter(
@@ -67,7 +81,7 @@ export const ColumnCreationForm = ({
     console.log("Saving column data...");
     if (columnName.trim()) {
       const columnData = {
-        name: columnName.trim().toLowerCase().replace(/\s+/g, "-"), // Convert to kebab-case like existing columns
+        name: columnName.trim().toLowerCase().replace(/\s+/g, "-"),
         reference: showReference
           ? {
               sheetId: selectedReferenceSheet?.["_id"],
@@ -77,7 +91,6 @@ export const ColumnCreationForm = ({
           : null,
         additionIndices: derivedAdditions,
         subtractionIndices: derivedSubtractions,
-
         recurrent:
           showRecurrent && selectedRecurrentColumn
             ? {
@@ -85,6 +98,16 @@ export const ColumnCreationForm = ({
                 recurrentColumnName: selectedRecurrentColumn.name,
               }
             : null,
+        // Add subrows configuration with subrowsEnabled
+        hasSubrows: showSubrows,
+        subrowsConfig: showSubrows
+          ? {
+              subrowsEnabled, // Add this line
+              subrowColumns: subrowColumns.filter((col) => col.name.trim()),
+              aggregateField,
+              aggregationType,
+            }
+          : null,
       };
 
       console.log("Column data being saved:", columnData);
@@ -136,6 +159,11 @@ export const ColumnCreationForm = ({
     setSelectedRecurrentColumn(null);
     setSheetSearchTerm("");
     setColumnSearchTerm("");
+    setShowSubrows(false);
+    setSubrowColumns([]);
+    setAggregateField("");
+    setAggregationType("sum");
+    setSubrowsEnabled(true);
   };
 
   const handleClose = () => {
@@ -231,6 +259,52 @@ export const ColumnCreationForm = ({
       sheet.sheetName.toLowerCase().includes(sheetSearchTerm.toLowerCase())
   );
 
+  const handleSubrowsToggle = () => {
+    if (showReference) {
+      setShowReference(false);
+      setSelectedReferenceSheet(null);
+      setSelectedReferenceColumn(null);
+    }
+    if (showRecurrent) {
+      setShowRecurrent(false);
+      setSelectedRecurrentColumn(null);
+    }
+    setShowSubrows(!showSubrows);
+    if (showSubrows) {
+      // Clear subrows data when turning off
+      setSubrowColumns([]);
+      setAggregateField("");
+      setAggregationType("sum");
+      setSubrowsEnabled(true); // Reset to default
+    }
+  };
+
+  const handleAddSubrowColumn = () => {
+    const newColumn = {
+      id: Date.now(),
+      name: "",
+      type: "string",
+      required: false,
+    };
+    setSubrowColumns([...subrowColumns, newColumn]);
+  };
+
+  const handleUpdateSubrowColumn = (id, field, value) => {
+    setSubrowColumns(
+      subrowColumns.map((col) =>
+        col.id === id ? { ...col, [field]: value } : col
+      )
+    );
+  };
+
+  const handleRemoveSubrowColumn = (id) => {
+    setSubrowColumns(subrowColumns.filter((col) => col.id !== id));
+    // Clear aggregate field if the removed column was selected
+    const removedColumn = subrowColumns.find((col) => col.id === id);
+    if (removedColumn && aggregateField === removedColumn.name) {
+      setAggregateField("");
+    }
+  };
   const filteredColumnsForReference = selectedReferenceSheet
     ? selectedReferenceSheet.attributes.filter((col) =>
         col.name.toLowerCase().includes(columnSearchTerm.toLowerCase())
@@ -297,6 +371,20 @@ export const ColumnCreationForm = ({
               >
                 <RotateCcw className="w-4 h-4" />
                 {showRecurrent ? "Remove Recurrent" : "Add Recurrent"}
+              </button>
+              <button
+                onClick={handleSubrowsToggle}
+                disabled={showReference || showRecurrent}
+                className={`flex items-center gap-2 px-3 py-2 text-sm border rounded-md transition-colors ${
+                  showSubrows
+                    ? "bg-green-100 text-green-700 border-green-300"
+                    : showReference || showRecurrent
+                    ? "border-gray-200 text-gray-400 cursor-not-allowed"
+                    : "border-gray-300 text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                <Plus className="w-4 h-4" />
+                {showSubrows ? "Remove Subrows" : "Enable Subrows"}
               </button>
             </div>
 
@@ -589,6 +677,196 @@ export const ColumnCreationForm = ({
                 )}
               </div>
             )}
+
+            {showSubrows && (
+              <div className="space-y-4 p-4 bg-green-50 rounded-lg border mt-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-gray-700">
+                    Configure Subrows Structure
+                  </label>
+                  <button
+                    onClick={() => setShowSubrows(false)}
+                    className="text-gray-500 hover:text-gray-900"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-white rounded border border-gray-200">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-gray-700">
+                      Enable Subrows Input
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      When enabled, users can input data through subrows. When
+                      disabled, only direct input is allowed.
+                    </span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={subrowsEnabled}
+                      onChange={(e) => setSubrowsEnabled(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                  </label>
+                </div>
+
+                {/* Subrow Columns Configuration */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-700">
+                      Subrow Columns
+                    </span>
+                    <button
+                      onClick={handleAddSubrowColumn}
+                      className="flex items-center gap-1 px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+                    >
+                      <Plus className="w-3 h-3" />
+                      Add Column
+                    </button>
+                  </div>
+
+                  {subrowColumns.length === 0 && (
+                    <div className="text-sm text-gray-500 text-center py-4 border-2 border-dashed border-gray-300 rounded-md">
+                      No subrow columns configured. Click "Add Column" to start.
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-2 max-h-[5rem] overflow-y-auto">
+                    {subrowColumns.map((column) => (
+                      <div
+                        key={column.id}
+                        className="flex items-center gap-2 p-3 bg-white rounded border border-gray-200"
+                      >
+                        {/* Column Name */}
+                        <div className="flex-1">
+                          <input
+                            type="text"
+                            placeholder="Column name"
+                            value={column.name}
+                            onChange={(e) =>
+                              handleUpdateSubrowColumn(
+                                column.id,
+                                "name",
+                                e.target.value
+                              )
+                            }
+                            className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                          />
+                        </div>
+
+                        {/* Column Type */}
+                        <div className="w-24">
+                          <select
+                            value={column.type}
+                            onChange={(e) =>
+                              handleUpdateSubrowColumn(
+                                column.id,
+                                "type",
+                                e.target.value
+                              )
+                            }
+                            className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                          >
+                            <option value="string">Text</option>
+                            <option value="number">Number</option>
+                            <option value="date">Date</option>
+                          </select>
+                        </div>
+
+                        {/* Required Checkbox */}
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="checkbox"
+                            checked={column.required}
+                            onChange={(e) =>
+                              handleUpdateSubrowColumn(
+                                column.id,
+                                "required",
+                                e.target.checked
+                              )
+                            }
+                            className="text-green-600 focus:ring-green-500"
+                          />
+                          <span className="text-xs text-gray-600">
+                            Required
+                          </span>
+                        </div>
+
+                        {/* Remove Button */}
+                        <button
+                          onClick={() => handleRemoveSubrowColumn(column.id)}
+                          className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Aggregate Configuration */}
+                {subrowColumns.length > 0 && (
+                  <div className="space-y-3 pt-3 border-t border-gray-200">
+                    <span className="text-sm font-medium text-gray-700">
+                      Aggregation Settings
+                    </span>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {/* Aggregate Field Selection */}
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">
+                          Aggregate Field
+                        </label>
+                        <select
+                          value={aggregateField}
+                          onChange={(e) => setAggregateField(e.target.value)}
+                          className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                        >
+                          <option value="">Select field to aggregate</option>
+                          {subrowColumns
+                            .filter(
+                              (col) => col.type === "number" && col.name.trim()
+                            )
+                            .map((col) => (
+                              <option key={col.id} value={col.name}>
+                                {col.name}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+
+                      {/* Aggregation Type */}
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">
+                          Aggregation Type
+                        </label>
+                        <select
+                          value={aggregationType}
+                          onChange={(e) => setAggregationType(e.target.value)}
+                          className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                          disabled={!aggregateField}
+                        >
+                          <option value="sum">Sum</option>
+                          {/* Future options: average, max, min */}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Preview */}
+                    {aggregateField && (
+                      <div className="p-2 bg-green-100 rounded text-sm text-green-800">
+                        <strong>Preview:</strong> The main column value will be
+                        the {aggregationType} of "{aggregateField}" from all
+                        subrows.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -762,6 +1040,13 @@ export const ColumnUpdateForm = ({
   const [sheetSearchTerm, setSheetSearchTerm] = useState("");
   const [columnSearchTerm, setColumnSearchTerm] = useState("");
 
+  const [showSubrows, setShowSubrows] = useState(false);
+  const [subrowsEnabled, setSubrowsEnabled] = useState(false);
+  const [subrowColumns, setSubrowColumns] = useState([]);
+  const [aggregateField, setAggregateField] = useState("");
+  const [aggregationType, setAggregationType] = useState("sum");
+  const [hasSubrows, setHasSubrows] = useState(false);
+
   // Initialize form with existing data
   useEffect(() => {
     if (existingData && isOpen) {
@@ -801,10 +1086,26 @@ export const ColumnUpdateForm = ({
   // Initialize form with existing data
   useEffect(() => {
     if (existingData && isOpen) {
+      console.log("Initializing form with existing data:", existingData);
+      console.log("Existing columns:", existingColumns);
       setColumnName(existingData.name || "");
       setAdditionIndices(existingData.additionIndices || []);
       setSubtractionIndices(existingData.subtractionIndices || []);
       setIsDerived(existingData.isDerived || false);
+
+      setHasSubrows(existingData.hasSubrows || false);
+      setShowSubrows(existingData.hasSubrows || false);
+      if (existingData.subrowsConfig) {
+        setSubrowsEnabled(existingData.subrowsConfig.subrowsEnabled || false);
+        setSubrowColumns(
+          existingData.subrowsConfig.subrowColumns?.map((col) => ({
+            ...col,
+            id: Date.now() + Math.random(), // Add unique ID for editing
+          })) || []
+        );
+        setAggregateField(existingData.subrowsConfig.aggregateField || "");
+        setAggregationType(existingData.subrowsConfig.aggregationType || "sum");
+      }
 
       // Initialize reference data
       if (existingData.reference) {
@@ -888,6 +1189,14 @@ export const ColumnUpdateForm = ({
       setShowRecurrent(false);
       setSelectedRecurrentColumn(null);
     }
+    if (showSubrows) {
+      setShowSubrows(false);
+      setHasSubrows(false);
+      setSubrowColumns([]);
+      setAggregateField("");
+      setAggregationType("sum");
+      setSubrowsEnabled(false);
+    }
     setShowReference(!showReference);
     if (showReference) {
       setSelectedReferenceSheet(null);
@@ -907,9 +1216,68 @@ export const ColumnUpdateForm = ({
       setColumnSearchTerm("");
       setReference(null);
     }
+    if (showSubrows) {
+      setShowSubrows(false);
+      setHasSubrows(false);
+      setSubrowColumns([]);
+      setAggregateField("");
+      setAggregationType("sum");
+      setSubrowsEnabled(false);
+    }
     setShowRecurrent(!showRecurrent);
     if (showRecurrent) {
       setSelectedRecurrentColumn(null);
+    }
+  };
+
+  const handleSubrowsToggle = () => {
+    if (showReference) {
+      setShowReference(false);
+      setSelectedReferenceSheet(null);
+      setSelectedReferenceColumn(null);
+      setSheetSearchTerm("");
+      setColumnSearchTerm("");
+      setReference(null);
+    }
+    if (showRecurrent) {
+      setShowRecurrent(false);
+      setSelectedRecurrentColumn(null);
+    }
+    setShowSubrows(!showSubrows);
+    setHasSubrows(!showSubrows);
+    if (showSubrows) {
+      // Clear subrows data when turning off
+      setSubrowColumns([]);
+      setAggregateField("");
+      setAggregationType("sum");
+      setSubrowsEnabled(false);
+    }
+  };
+
+  const handleAddSubrowColumn = () => {
+    const newColumn = {
+      id: Date.now(),
+      name: "",
+      type: "string",
+      required: false,
+    };
+    setSubrowColumns([...subrowColumns, newColumn]);
+  };
+
+  const handleUpdateSubrowColumn = (id, field, value) => {
+    setSubrowColumns(
+      subrowColumns.map((col) =>
+        col.id === id ? { ...col, [field]: value } : col
+      )
+    );
+  };
+
+  const handleRemoveSubrowColumn = (id) => {
+    setSubrowColumns(subrowColumns.filter((col) => col.id !== id));
+    // Clear aggregate field if the removed column was selected
+    const removedColumn = subrowColumns.find((col) => col.id === id);
+    if (removedColumn && aggregateField === removedColumn.name) {
+      setAggregateField("");
     }
   };
 
@@ -970,6 +1338,26 @@ export const ColumnUpdateForm = ({
               referenceColumnName: selectedRecurrentColumn.name,
             }
           : null,
+      // NEW: Add subrows data
+      hasSubrows: hasSubrows,
+      subrowsConfig: hasSubrows
+        ? {
+            subrowsEnabled,
+            subrowColumns: subrowColumns
+              .filter((col) => col.name.trim())
+              .map((col) => ({
+                name: col.name,
+                type: col.type,
+                required: col.required,
+                autoIncrement:
+                  col.type === "number" &&
+                  col.name.toLowerCase().includes("sr"),
+                isAggregateField: col.name === aggregateField,
+              })),
+            aggregateField,
+            aggregationType,
+          }
+        : null,
     };
 
     onSave(formData);
@@ -989,6 +1377,12 @@ export const ColumnUpdateForm = ({
     setSelectedRecurrentColumn(null);
     setSheetSearchTerm("");
     setColumnSearchTerm("");
+    setShowSubrows(false);
+    setHasSubrows(false);
+    setSubrowsEnabled(false);
+    setSubrowColumns([]);
+    setAggregateField("");
+    setAggregationType("sum");
     onClose();
   };
 
@@ -1053,7 +1447,7 @@ export const ColumnUpdateForm = ({
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
           <div className="flex items-start justify-center flex-row w-full gap-6">
             {/* Left Column - Basic Info */}
-            <div className="w-full space-y-6">
+            <div className={`${(isDerived || showRecurrent || showReference || showSubrows) ? "w-1/2" : "w-full"} space-y-6`}>
               {/* Column Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1104,18 +1498,18 @@ export const ColumnUpdateForm = ({
                 </div>
               </div>
 
-              {/* Reference and Recurrent Options for Independent Columns */}
+              {/* Reference, Recurrent, SubRows Options for Independent Columns */}
               {!isDerived && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
+                <div className="">
+                  <div className={`flex items-center ${(isDerived || showRecurrent || showReference || showSubrows) ? "max-w-[60%] flex-wrap gap-3" : "justify-between"}`}>
                     <button
                       onClick={handleReferenceToggle}
-                      disabled={showRecurrent}
+                      disabled={showRecurrent || showSubrows}
                       className={`flex items-center min-w-[10rem] gap-2 px-2 py-2 text-sm border rounded-md transition-colors ${
                         showReference
                           ? "bg-blue-100 text-blue-700 border-blue-300"
-                          : showRecurrent
-                          ? "border-gray-200 text-gray-400 cursor-not-allowed"
+                          : showRecurrent || showSubrows
+                          ? "hidden border-gray-200 text-gray-400 cursor-not-allowed"
                           : "border-gray-300 text-gray-600 hover:bg-gray-100"
                       }`}
                     >
@@ -1124,17 +1518,31 @@ export const ColumnUpdateForm = ({
                     </button>
                     <button
                       onClick={handleRecurrentToggle}
-                      disabled={showReference}
+                      disabled={showReference || showSubrows}
                       className={`flex items-center min-w-[10rem] justify-center gap-2 px-3 py-2 text-sm border rounded-md transition-colors ${
                         showRecurrent
                           ? "bg-purple-100 text-purple-700 border-purple-300"
-                          : showReference
-                          ? "border-gray-200 text-gray-400 cursor-not-allowed"
+                          : showReference || showSubrows
+                          ? "hidden border-gray-200 text-gray-400 cursor-not-allowed"
                           : "border-gray-300 text-gray-600 hover:bg-gray-100"
                       }`}
                     >
                       <RotateCcw className="w-4 h-4" />
                       {showRecurrent ? "Remove Recurrent" : "Add Recurrent"}
+                    </button>
+                    <button
+                      onClick={handleSubrowsToggle}
+                      disabled={showReference || showRecurrent}
+                      className={`flex items-center min-w-[10rem] gap-2 px-3 py-2 text-sm border rounded-md transition-colors ${
+                        showSubrows
+                          ? "bg-green-100 text-green-700 border-green-300"
+                          : showReference || showRecurrent
+                          ? "border-gray-200 text-gray-400 cursor-not-allowed"
+                          : "border-gray-300 text-gray-600 hover:bg-gray-100"
+                      }`}
+                    >
+                      <Plus className="w-4 h-4" />
+                      {showSubrows ? "Remove Subrows" : "Edit Subrows"}
                     </button>
                   </div>
                 </div>
@@ -1142,8 +1550,8 @@ export const ColumnUpdateForm = ({
             </div>
 
             {/* Right Column - Configuration */}
-            {(isDerived || showRecurrent || showReference) && (
-              <div className="w-full space-y-6">
+            {(isDerived || showRecurrent || showReference || showSubrows) && (
+              <div className="w-1/2 space-y-6">
                 {/* Reference Configuration */}
                 {!isDerived && showReference && (
                   <div className="space-y-4 p-4 bg-blue-50 rounded-lg border">
@@ -1391,6 +1799,206 @@ export const ColumnUpdateForm = ({
                   </div>
                 )}
 
+                {!isDerived && showSubrows && (
+                  <div className="space-y-4 p-4 bg-green-50 rounded-lg border">
+                    <h3 className="text-lg font-medium text-gray-900">
+                      Subrows Configuration
+                    </h3>
+
+                    {/* Subrows Enabled Toggle */}
+                    <div className="flex items-center justify-between p-3 bg-white rounded border border-gray-200">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-gray-700">
+                          Enable Subrows Input
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          When enabled, users can input data through subrows
+                        </span>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={subrowsEnabled}
+                          onChange={(e) => setSubrowsEnabled(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                      </label>
+                    </div>
+
+                    {/* Subrow Columns Management */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">
+                          Subrow Columns
+                        </span>
+                        <button
+                          onClick={handleAddSubrowColumn}
+                          className="flex items-center gap-1 px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+                        >
+                          <Plus className="w-3 h-3" />
+                          Add Column
+                        </button>
+                      </div>
+
+                      {subrowColumns.length === 0 && (
+                        <div className="text-sm text-gray-500 text-center py-4 border-2 border-dashed border-gray-300 rounded-md">
+                          No subrow columns configured. Click "Add Column" to
+                          start.
+                        </div>
+                      )}
+
+                      {subrowColumns.map((column) => (
+                        <div
+                          key={column.id}
+                          className="flex items-center gap-2 p-3 bg-white rounded border border-gray-200"
+                        >
+                          {/* Column Name */}
+                          <div className="flex-1">
+                            <input
+                              type="text"
+                              placeholder="Column name"
+                              value={column.name}
+                              onChange={(e) =>
+                                handleUpdateSubrowColumn(
+                                  column.id,
+                                  "name",
+                                  e.target.value
+                                )
+                              }
+                              className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                            />
+                          </div>
+
+                          {/* Column Type */}
+                          <div className="w-24">
+                            <select
+                              value={column.type}
+                              onChange={(e) =>
+                                handleUpdateSubrowColumn(
+                                  column.id,
+                                  "type",
+                                  e.target.value
+                                )
+                              }
+                              className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                            >
+                              <option value="string">Text</option>
+                              <option value="number">Number</option>
+                              <option value="date">Date</option>
+                            </select>
+                          </div>
+
+                          {/* Required Checkbox */}
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="checkbox"
+                              checked={column.required}
+                              onChange={(e) =>
+                                handleUpdateSubrowColumn(
+                                  column.id,
+                                  "required",
+                                  e.target.checked
+                                )
+                              }
+                              className="text-green-600 focus:ring-green-500"
+                            />
+                            <span className="text-xs text-gray-600">
+                              Required
+                            </span>
+                          </div>
+
+                          {/* Remove Button */}
+                          <button
+                            onClick={() => handleRemoveSubrowColumn(column.id)}
+                            className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Aggregate Configuration */}
+                    {subrowColumns.length > 0 && (
+                      <div className="space-y-3 pt-3 border-t border-gray-200">
+                        <span className="text-sm font-medium text-gray-700">
+                          Aggregation Settings
+                        </span>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {/* Aggregate Field Selection */}
+                          <div>
+                            <label className="block text-xs text-gray-600 mb-1">
+                              Aggregate Field
+                            </label>
+                            <select
+                              value={aggregateField}
+                              onChange={(e) =>
+                                setAggregateField(e.target.value)
+                              }
+                              className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                            >
+                              <option value="">
+                                Select field to aggregate
+                              </option>
+                              {subrowColumns
+                                .filter(
+                                  (col) =>
+                                    col.type === "number" && col.name.trim()
+                                )
+                                .map((col) => (
+                                  <option key={col.id} value={col.name}>
+                                    {col.name}
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
+
+                          {/* Aggregation Type */}
+                          <div>
+                            <label className="block text-xs text-gray-600 mb-1">
+                              Aggregation Type
+                            </label>
+                            <select
+                              value={aggregationType}
+                              onChange={(e) =>
+                                setAggregationType(e.target.value)
+                              }
+                              className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                              disabled={!aggregateField}
+                            >
+                              <option value="sum">Sum</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Preview */}
+                        {aggregateField && (
+                          <div className="p-3 bg-green-100 rounded">
+                            <div className="text-sm font-medium text-green-800 mb-2">
+                              Configuration Preview:
+                            </div>
+                            <div className="text-sm text-green-700 space-y-1">
+                              <div>
+                                • The main column value will be the{" "}
+                                {aggregationType} of "{aggregateField}" from all
+                                subrows
+                              </div>
+                              <div>
+                                • Subrows input is currently{" "}
+                                <strong>
+                                  {subrowsEnabled ? "enabled" : "disabled"}
+                                </strong>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Formula Section - Only show if derived */}
                 {isDerived && (
                   <div>
@@ -1498,13 +2106,13 @@ export const ColumnUpdateForm = ({
 
 export const processLastRowWithZeroDate = async (sheetData, sheetId) => {
   if (!sheetData || sheetData.length === 0) return false;
-  
+
   const lastRow = sheetData[sheetData.length - 1];
-  
+
   // Check if last row's first attribute (date column) is "0"
   if (lastRow.attributes && lastRow.attributes[0] === "0") {
     console.log("Found last row with date = 0, processing...");
-    
+
     // Get today's date in the correct format
     const today = new Date();
     const formattedDate = today.toLocaleDateString("en-GB", {
@@ -1512,32 +2120,33 @@ export const processLastRowWithZeroDate = async (sheetData, sheetId) => {
       month: "short",
       year: "numeric",
     });
-    
+
     // Create updated row array
     const updatedRowArray = [...lastRow.attributes];
     updatedRowArray[0] = formattedDate; // Set today's date
-    
+
     // Get current sheet metadata for calculations
-    const currentSheetMeta = rawMetadata.find(sheet => sheet._id === sheetId);
+    const currentSheetMeta = rawMetadata.find((sheet) => sheet._id === sheetId);
     if (!currentSheetMeta) return false;
-    
+
     // Calculate recurrent values
     currentSheetMeta.attributes.forEach((attr, attrIndex) => {
       if (attr.recurrentCheck?.isRecurrent) {
         const refIndex = attr.recurrentCheck.recurrentReferenceIndice;
         if (refIndex !== null && sheetData.length > 1) {
           // Get value from previous row (second last row)
-          const previousRowValue = sheetData[sheetData.length - 2].attributes[refIndex];
+          const previousRowValue =
+            sheetData[sheetData.length - 2].attributes[refIndex];
           updatedRowArray[attrIndex] = previousRowValue || "0";
         }
       }
     });
-    
+
     // Calculate derived values
     currentSheetMeta.attributes.forEach((attr, attrIndex) => {
       if (attr.derived && attr.formula) {
         let calculatedValue = 0;
-        
+
         // Add values from addition indices
         if (attr.formula.additionIndices?.length > 0) {
           attr.formula.additionIndices.forEach((idx) => {
@@ -1545,7 +2154,7 @@ export const processLastRowWithZeroDate = async (sheetData, sheetId) => {
             calculatedValue += value;
           });
         }
-        
+
         // Subtract values from subtraction indices
         if (attr.formula.subtractionIndices?.length > 0) {
           attr.formula.subtractionIndices.forEach((idx) => {
@@ -1553,24 +2162,24 @@ export const processLastRowWithZeroDate = async (sheetData, sheetId) => {
             calculatedValue -= value;
           });
         }
-        
+
         updatedRowArray[attrIndex] = calculatedValue;
       }
     });
-    
+
     console.log("Updated row array with calculations:", updatedRowArray);
-    
+
     // Call update API
     try {
       const targetDate = lastRow.createdAt;
       const rowIndex = sheetData.length - 1;
-      
+
       await updateRowData(sheetId, {
         rowIndex: rowIndex,
         attributes: updatedRowArray,
         targetDate: targetDate,
       });
-      
+
       console.log("Successfully updated last row with date 0");
       return true; // Indicate that update was performed
     } catch (error) {
@@ -1578,6 +2187,6 @@ export const processLastRowWithZeroDate = async (sheetData, sheetId) => {
       return false;
     }
   }
-  
+
   return false; // No update needed
 };

@@ -1,19 +1,22 @@
 import React, { useState, useEffect } from "react";
 import { useSelector } from "react-redux";
-import { 
-  Plus, 
-  Save, 
-  X, 
-  Calendar, 
-  FileSpreadsheet, 
-  Trash2, 
+import {
+  Plus,
+  Save,
+  X,
+  Calendar,
+  FileSpreadsheet,
+  Trash2,
   Edit3,
   Check,
   AlertCircle,
-  ArrowLeft
+  ArrowLeft,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { createNewSheet, fetchMetadata } from "../../../services/repository/sheetsRepo";
+import {
+  createNewSheet,
+  fetchMetadata,
+} from "../../../services/repository/sheetsRepo";
 import { selectAccount } from "../../../app/DashboardSlice";
 import toast from "react-hot-toast";
 import { ColumnCreationForm } from "./utils/Helper";
@@ -21,7 +24,7 @@ import { ColumnCreationForm } from "./utils/Helper";
 const CreateSheet = () => {
   const navigate = useNavigate();
   const account = useSelector(selectAccount);
-  
+
   // State management
   const [existingSheets, setExistingSheets] = useState([]);
   const [sheetName, setSheetName] = useState("");
@@ -41,18 +44,18 @@ const CreateSheet = () => {
       name: "date",
       formula: {
         additionIndices: [],
-        subtractionIndices: []
+        subtractionIndices: [],
       },
       linkedFrom: {
         sheetObjectId: null,
-        attributeIndice: null
+        attributeIndice: null,
       },
       recurrentCheck: {
         isRecurrent: false,
         recurrentReferenceIndice: null,
-        recurrenceFedStatus: false
+        recurrenceFedStatus: false,
       },
-      derived: false
+      derived: false,
     };
     setAttributes([defaultDateColumn]);
   }, []);
@@ -64,11 +67,11 @@ const CreateSheet = () => {
         setLoading(true);
         const loginRole = account?.role || "user";
         const fetchedMetadata = await fetchMetadata(loginRole);
-        
+
         if (fetchedMetadata && Array.isArray(fetchedMetadata)) {
-          const sheetsInfo = fetchedMetadata.map(sheet => ({
+          const sheetsInfo = fetchedMetadata.map((sheet) => ({
             _id: sheet._id,
-            sheetName: sheet.sheetName
+            sheetName: sheet.sheetName,
           }));
           setExistingSheets(sheetsInfo);
         }
@@ -100,15 +103,18 @@ const CreateSheet = () => {
     }
 
     if (!/^[a-zA-Z][a-zA-Z0-9_\s]*$/.test(name.trim())) {
-      setSheetNameError("Sheet name must start with a letter and contain only letters, numbers, underscores, and spaces");
+      setSheetNameError(
+        "Sheet name must start with a letter and contain only letters, numbers, underscores, and spaces"
+      );
       setIsValidSheetName(false);
       return false;
     }
 
     // Check for duplicate names (case insensitive)
     const normalizedName = name.trim().toLowerCase().replace(/\s+/g, "_");
-    const isDuplicate = existingSheets.some(sheet => 
-      sheet.sheetName.toLowerCase().replace(/\s+/g, "_") === normalizedName
+    const isDuplicate = existingSheets.some(
+      (sheet) =>
+        sheet.sheetName.toLowerCase().replace(/\s+/g, "_") === normalizedName
     );
 
     if (isDuplicate) {
@@ -139,14 +145,17 @@ const CreateSheet = () => {
   // Close column type dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (showColumnTypeDropdown && !event.target.closest('.column-type-dropdown')) {
+      if (
+        showColumnTypeDropdown &&
+        !event.target.closest(".column-type-dropdown")
+      ) {
         setShowColumnTypeDropdown(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [showColumnTypeDropdown]);
 
@@ -155,25 +164,62 @@ const CreateSheet = () => {
       name: columnData.name,
       formula: {
         additionIndices: columnData.additionIndices || [],
-        subtractionIndices: columnData.subtractionIndices || []
+        subtractionIndices: columnData.subtractionIndices || [],
       },
-      linkedFrom: columnData.reference ? {
-        sheetObjectId: columnData.reference.sheetId,
-        attributeIndice: columnData.reference.columnIndex
-      } : {
-        sheetObjectId: null,
-        attributeIndice: null
-      },
-      recurrentCheck: columnData.recurrent ? {
-        isRecurrent: true,
-        recurrentReferenceIndice: columnData.recurrent.recurrentColumnIndex,
-        recurrenceFedStatus: false
-      } : {
-        isRecurrent: false,
-        recurrentReferenceIndice: null,
-        recurrenceFedStatus: false
-      },
-      derived: (columnData.additionIndices?.length > 0 || columnData.subtractionIndices?.length > 0)
+      linkedFrom: columnData.reference
+        ? {
+            sheetObjectId: columnData.reference.sheetId,
+            attributeIndice: columnData.reference.columnIndex,
+          }
+        : {
+            sheetObjectId: null,
+            attributeIndice: null,
+          },
+      recurrentCheck: columnData.recurrent
+        ? {
+            isRecurrent: true,
+            recurrentReferenceIndice: columnData.recurrent.recurrentColumnIndex,
+            recurrenceFedStatus: false,
+          }
+        : {
+            isRecurrent: false,
+            recurrentReferenceIndice: null,
+            recurrenceFedStatus: false,
+          },
+      derived:
+        columnData.additionIndices?.length > 0 ||
+        columnData.subtractionIndices?.length > 0,
+
+      //Subrows configuration
+      hasSubrows: columnData.hasSubrows || false,
+      subrowsConfig:
+        columnData.hasSubrows && columnData.subrowsConfig
+          ? {
+              subrowsEnabled: columnData.subrowsConfig.subrowsEnabled,
+              subrowColumns: columnData.subrowsConfig.subrowColumns.map(
+                (col) => ({
+                  name: col.name,
+                  type: col.type,
+                  required: col.required,
+                  autoIncrement:
+                    col.type === "number" &&
+                    col.name.toLowerCase().includes("sr")
+                      ? true
+                      : false,
+                  isAggregateField:
+                    col.name === columnData.subrowsConfig.aggregateField,
+                })
+              ),
+              aggregationType:
+                columnData.subrowsConfig.aggregationType || "sum",
+              aggregateField: columnData.subrowsConfig.aggregateField,
+            }
+          : {
+              subrowsEnabled: false,
+              subrowColumns: [],
+              aggregationType: "sum",
+              aggregateField: null,
+            },
     };
 
     if (editingColumn !== null) {
@@ -197,7 +243,9 @@ const CreateSheet = () => {
       return;
     }
     setEditingColumn(index);
-    setSelectedColumnType(attributes[index].derived ? "derived" : "independent");
+    setSelectedColumnType(
+      attributes[index].derived ? "derived" : "independent"
+    );
     setShowColumnModal(true);
   };
 
@@ -207,62 +255,61 @@ const CreateSheet = () => {
       toast.error("Date column cannot be deleted");
       return;
     }
-    
+
     const updatedAttributes = attributes.filter((_, i) => i !== index);
-    
+
     // Update formula indices for derived columns
-    const adjustedAttributes = updatedAttributes.map(attr => {
+    const adjustedAttributes = updatedAttributes.map((attr) => {
       if (attr.derived && attr.formula) {
         const adjustedFormula = {
           additionIndices: attr.formula.additionIndices
-            .map(idx => idx > index ? idx - 1 : idx)
-            .filter(idx => idx !== index),
+            .map((idx) => (idx > index ? idx - 1 : idx))
+            .filter((idx) => idx !== index),
           subtractionIndices: attr.formula.subtractionIndices
-            .map(idx => idx > index ? idx - 1 : idx)
-            .filter(idx => idx !== index)
+            .map((idx) => (idx > index ? idx - 1 : idx))
+            .filter((idx) => idx !== index),
         };
         return { ...attr, formula: adjustedFormula };
       }
       return attr;
     });
-    
+
     setAttributes(adjustedAttributes);
   };
 
   // Create sheet
   const handleCreateSheet = async () => {
-  if (!validateSheetName(sheetName) || attributes.length === 0) {
-    toast.error("Please provide a valid sheet name and at least one column");
-    return;
-  }
-
-  setIsCreating(true);
-  
-  const sheetMetadata = {
-    sheetName: sheetName.trim().replace(/\s+/g, "_"),
-    attributes: attributes
-  };
-
-  try {
-    console.log("Creating new sheet with metadata:", sheetMetadata);
-    
-    const result = await createNewSheet(sheetMetadata);
-    
-    if (result.success) {
-      toast.success("Sheet created successfully!");
-      // Navigate back to sheets view or wherever appropriate
-      navigate("/sheets");
-    } else {
-      toast.error(result.error || "Failed to create sheet");
+    if (!validateSheetName(sheetName) || attributes.length === 0) {
+      toast.error("Please provide a valid sheet name and at least one column");
+      return;
     }
-    
-  } catch (error) {
-    console.error("Error creating sheet:", error);
-    toast.error("Failed to create sheet");
-  } finally {
-    setIsCreating(false);
-  }
-};
+
+    setIsCreating(true);
+
+    const sheetMetadata = {
+      sheetName: sheetName.trim().replace(/\s+/g, "_"),
+      attributes: attributes,
+    };
+
+    try {
+      console.log("Creating new sheet with metadata:", sheetMetadata);
+
+      const result = await createNewSheet(sheetMetadata);
+
+      if (result.success) {
+        toast.success("Sheet created successfully!");
+        // Navigate back to sheets view or wherever appropriate
+        navigate("/sheets");
+      } else {
+        toast.error(result.error || "Failed to create sheet");
+      }
+    } catch (error) {
+      console.error("Error creating sheet:", error);
+      toast.error("Failed to create sheet");
+    } finally {
+      setIsCreating(false);
+    }
+  };
 
   // Get column type for display
   const getColumnType = (attr) => {
@@ -313,10 +360,12 @@ const CreateSheet = () => {
               </button>
               <div className="flex items-center space-x-3">
                 <FileSpreadsheet className="w-8 h-8 text-blue-600" />
-                <h1 className="text-2xl font-bold text-gray-900">Create New Sheet</h1>
+                <h1 className="text-2xl font-bold text-gray-900">
+                  Create New Sheet
+                </h1>
               </div>
             </div>
-            
+
             <div className="flex items-center space-x-3">
               <button
                 onClick={() => navigate("/sheets")}
@@ -326,7 +375,9 @@ const CreateSheet = () => {
               </button>
               <button
                 onClick={handleCreateSheet}
-                disabled={!isValidSheetName || attributes.length === 0 || isCreating}
+                disabled={
+                  !isValidSheetName || attributes.length === 0 || isCreating
+                }
                 className="flex items-center space-x-2 bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
               >
                 {isCreating ? (
@@ -344,12 +395,11 @@ const CreateSheet = () => {
       {/* Main Content */}
       <div className="max-w-8xl mx-auto px-2 sm:px-6 lg:px-4 py-4 h-[calc(100vh-9rem)]">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full">
-          
           {/* Left Column - Sheet Configuration */}
           <div className="lg:col-span-1 h-full">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 h-full">
               {/* <h2 className="text-lg font-semibold text-gray-900 mb-6">Sheet Configuration</h2> */}
-              
+
               {/* Sheet Name Input */}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -362,10 +412,10 @@ const CreateSheet = () => {
                     onChange={handleSheetNameChange}
                     placeholder="e.g., Financial Tracker, Inventory Management"
                     className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 ${
-                      sheetNameError 
-                        ? "border-red-300 focus:ring-red-500" 
-                        : isValidSheetName 
-                        ? "border-green-300 focus:ring-green-500" 
+                      sheetNameError
+                        ? "border-red-300 focus:ring-red-500"
+                        : isValidSheetName
+                        ? "border-green-300 focus:ring-green-500"
                         : "border-gray-300 focus:ring-blue-500"
                     }`}
                   />
@@ -380,34 +430,48 @@ const CreateSheet = () => {
                   <p className="mt-2 text-sm text-red-600">{sheetNameError}</p>
                 )}
                 {isValidSheetName && (
-                  <p className="mt-2 text-sm text-green-600">Sheet name is available!</p>
+                  <p className="mt-2 text-sm text-green-600">
+                    Sheet name is available!
+                  </p>
                 )}
               </div>
 
               {/* Sheet Statistics */}
               <div className="bg-gray-100 rounded-lg p-4">
-                <h3 className="text-sm font-medium text-gray-700 mb-3">Sheet Summary</h3>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">
+                  Sheet Summary
+                </h3>
                 <div className="space-y-2">
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-gray-600">Total Columns:</span>
-                    <span className="font-medium text-gray-900">{attributes.length}</span>
+                    <span className="font-medium text-gray-900">
+                      {attributes.length}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-gray-600">Derived Columns:</span>
                     <span className="font-medium text-yellow-600">
-                      {attributes.filter(attr => attr.derived).length}
+                      {attributes.filter((attr) => attr.derived).length}
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-gray-600">Referenced Columns:</span>
                     <span className="font-medium text-blue-600">
-                      {attributes.filter(attr => attr.linkedFrom?.sheetObjectId).length}
+                      {
+                        attributes.filter(
+                          (attr) => attr.linkedFrom?.sheetObjectId
+                        ).length
+                      }
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-gray-600">Recurrent Columns:</span>
                     <span className="font-medium text-purple-600">
-                      {attributes.filter(attr => attr.recurrentCheck?.isRecurrent).length}
+                      {
+                        attributes.filter(
+                          (attr) => attr.recurrentCheck?.isRecurrent
+                        ).length
+                      }
                     </span>
                   </div>
                 </div>
@@ -418,14 +482,17 @@ const CreateSheet = () => {
           {/* Right Column - Column Management */}
           <div className="lg:col-span-2">
             <div className="bg-white rounded-xl shadow-sm border h-full border-gray-200">
-              
               {/* Header */}
               <div className="px-6 py-4 border-b border-gray-200">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-gray-900">Column Configuration</h2>
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    Column Configuration
+                  </h2>
                   <div className="relative column-type-dropdown">
                     <button
-                      onClick={() => setShowColumnTypeDropdown(!showColumnTypeDropdown)}
+                      onClick={() =>
+                        setShowColumnTypeDropdown(!showColumnTypeDropdown)
+                      }
                       className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
                     >
                       <Plus className="w-4 h-4" />
@@ -444,23 +511,33 @@ const CreateSheet = () => {
                               <FileSpreadsheet className="w-4 h-4 text-gray-600" />
                             </div>
                             <div>
-                              <div className="font-medium text-gray-900">Independent</div>
-                              <div className="text-xs text-gray-500">Manual input values</div>
+                              <div className="font-medium text-gray-900">
+                                Independent
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                Manual input values
+                              </div>
                             </div>
                           </div>
                         </button>
-                        
+
                         <button
                           onClick={() => handleColumnTypeSelect("derived")}
                           className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors group"
                         >
                           <div className="flex items-center space-x-3">
                             <div className="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center group-hover:bg-yellow-200 transition-colors">
-                              <span className="text-yellow-600 font-bold text-sm">fx</span>
+                              <span className="text-yellow-600 font-bold text-sm">
+                                fx
+                              </span>
                             </div>
                             <div>
-                              <div className="font-medium text-gray-900">Derived</div>
-                              <div className="text-xs text-gray-500">Calculated from other columns</div>
+                              <div className="font-medium text-gray-900">
+                                Derived
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                Calculated from other columns
+                              </div>
                             </div>
                           </div>
                         </button>
@@ -476,14 +553,16 @@ const CreateSheet = () => {
                   <div className="text-center py-12">
                     <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <p className="text-gray-500">No columns defined yet</p>
-                    <p className="text-sm text-gray-400 mt-1">Click "Add Column" to get started</p>
+                    <p className="text-sm text-gray-400 mt-1">
+                      Click "Add Column" to get started
+                    </p>
                   </div>
                 ) : (
                   <div className="space-y-4 flex flex-col overflow-y-auto">
                     {attributes.map((attr, index) => {
                       const columnType = getColumnType(attr);
                       const typeClass = getColumnTypeClass(columnType);
-                      
+
                       return (
                         <div
                           key={index}
@@ -497,16 +576,22 @@ const CreateSheet = () => {
                                 </span>
                               </div>
                             </div>
-                            
+
                             <div className="flex-1">
                               <div className="flex items-center space-x-3">
                                 <h3 className="font-medium text-gray-900 capitalize">
                                   {attr.name.replace(/_/g, " ")}
                                 </h3>
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium border ${typeClass}`}>
-                                  {columnType === "independent" ? "Independent" : 
-                                   columnType === "derived" ? "Derived" :
-                                   columnType === "referenced" ? "Referenced" : "Recurrent"}
+                                <span
+                                  className={`px-2 py-1 rounded-full text-xs font-medium border ${typeClass}`}
+                                >
+                                  {columnType === "independent"
+                                    ? "Independent"
+                                    : columnType === "derived"
+                                    ? "Derived"
+                                    : columnType === "referenced"
+                                    ? "Referenced"
+                                    : "Recurrent"}
                                 </span>
                                 {index === 0 && (
                                   <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-300">
@@ -514,24 +599,41 @@ const CreateSheet = () => {
                                   </span>
                                 )}
                               </div>
-                              
+
                               {/* Formula preview for derived columns */}
                               {attr.derived && attr.formula && (
                                 <div className="mt-2 text-sm text-gray-600">
                                   <span className="font-medium">Formula: </span>
                                   {attr.formula.additionIndices?.length > 0 && (
                                     <span className="text-green-600">
-                                      +{attr.formula.additionIndices.map(idx => 
-                                        attributes[idx]?.name?.replace(/_/g, " ") || `Column ${idx}`
-                                      ).join(" +")}
+                                      +
+                                      {attr.formula.additionIndices
+                                        .map(
+                                          (idx) =>
+                                            attributes[idx]?.name?.replace(
+                                              /_/g,
+                                              " "
+                                            ) || `Column ${idx}`
+                                        )
+                                        .join(" +")}
                                     </span>
                                   )}
-                                  {attr.formula.subtractionIndices?.length > 0 && (
+                                  {attr.formula.subtractionIndices?.length >
+                                    0 && (
                                     <span className="text-red-600">
-                                      {attr.formula.additionIndices?.length > 0 ? " " : ""}
-                                      -{attr.formula.subtractionIndices.map(idx => 
-                                        attributes[idx]?.name?.replace(/_/g, " ") || `Column ${idx}`
-                                      ).join(" -")}
+                                      {attr.formula.additionIndices?.length > 0
+                                        ? " "
+                                        : ""}
+                                      -
+                                      {attr.formula.subtractionIndices
+                                        .map(
+                                          (idx) =>
+                                            attributes[idx]?.name?.replace(
+                                              /_/g,
+                                              " "
+                                            ) || `Column ${idx}`
+                                        )
+                                        .join(" -")}
                                     </span>
                                   )}
                                 </div>
@@ -540,15 +642,22 @@ const CreateSheet = () => {
                               {/* Recurrent reference preview */}
                               {attr.recurrentCheck?.isRecurrent && (
                                 <div className="mt-2 text-sm text-purple-600">
-                                  <span className="font-medium">Recurrent from: </span>
-                                  {attributes[attr.recurrentCheck.recurrentReferenceIndice]?.name?.replace(/_/g, " ") || "Previous period"}
+                                  <span className="font-medium">
+                                    Recurrent from:{" "}
+                                  </span>
+                                  {attributes[
+                                    attr.recurrentCheck.recurrentReferenceIndice
+                                  ]?.name?.replace(/_/g, " ") ||
+                                    "Previous period"}
                                 </div>
                               )}
 
                               {/* Reference preview */}
                               {attr.linkedFrom?.sheetObjectId && (
                                 <div className="mt-2 text-sm text-blue-600">
-                                  <span className="font-medium">Referenced from external sheet</span>
+                                  <span className="font-medium">
+                                    Referenced from external sheet
+                                  </span>
                                 </div>
                               )}
                             </div>
@@ -560,7 +669,11 @@ const CreateSheet = () => {
                               onClick={() => handleEditColumn(index)}
                               disabled={index === 0}
                               className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                              title={index === 0 ? "Date column cannot be edited" : "Edit column"}
+                              title={
+                                index === 0
+                                  ? "Date column cannot be edited"
+                                  : "Edit column"
+                              }
                             >
                               <Edit3 className="w-4 h-4" />
                             </button>
@@ -568,7 +681,11 @@ const CreateSheet = () => {
                               onClick={() => handleDeleteColumn(index)}
                               disabled={index === 0}
                               className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                              title={index === 0 ? "Date column cannot be deleted" : "Delete column"}
+                              title={
+                                index === 0
+                                  ? "Date column cannot be deleted"
+                                  : "Delete column"
+                              }
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -597,18 +714,36 @@ const CreateSheet = () => {
           type={selectedColumnType}
           sheets={existingSheets}
           currentSheetId={null}
-          existingData={editingColumn !== null ? {
-            name: attributes[editingColumn]?.name || "",
-            additionIndices: attributes[editingColumn]?.formula?.additionIndices || [],
-            subtractionIndices: attributes[editingColumn]?.formula?.subtractionIndices || [],
-            reference: attributes[editingColumn]?.linkedFrom?.sheetObjectId ? {
-              sheetId: attributes[editingColumn]?.linkedFrom?.sheetObjectId,
-              columnIndex: attributes[editingColumn]?.linkedFrom?.attributeIndice
-            } : null,
-            recurrent: attributes[editingColumn]?.recurrentCheck?.isRecurrent ? {
-              recurrentColumnIndex: attributes[editingColumn]?.recurrentCheck?.recurrentReferenceIndice
-            } : null
-          } : null}
+          existingData={
+            editingColumn !== null
+              ? {
+                  name: attributes[editingColumn]?.name || "",
+                  additionIndices:
+                    attributes[editingColumn]?.formula?.additionIndices || [],
+                  subtractionIndices:
+                    attributes[editingColumn]?.formula?.subtractionIndices ||
+                    [],
+                  reference: attributes[editingColumn]?.linkedFrom
+                    ?.sheetObjectId
+                    ? {
+                        sheetId:
+                          attributes[editingColumn]?.linkedFrom?.sheetObjectId,
+                        columnIndex:
+                          attributes[editingColumn]?.linkedFrom
+                            ?.attributeIndice,
+                      }
+                    : null,
+                  recurrent: attributes[editingColumn]?.recurrentCheck
+                    ?.isRecurrent
+                    ? {
+                        recurrentColumnIndex:
+                          attributes[editingColumn]?.recurrentCheck
+                            ?.recurrentReferenceIndice,
+                      }
+                    : null,
+                }
+              : null
+          }
           availableAttributes={attributes}
         />
       )}

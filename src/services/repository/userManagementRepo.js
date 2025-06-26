@@ -100,7 +100,7 @@ export function updateUserInformation(userId, name) {
 
       console.log("Update User Info API response:", response);
 
-      if (response.status === 201) {
+      if (response.status >= 200  || response.status <=300) {
         toast.success("User updated successfully!");
         return {
           success: true,
@@ -200,7 +200,7 @@ export function grantUserAccess(userId, newSheetIds, currentUserData) {
       
       console.log("Grant Access API response:", response);
       
-      if (response.status === 201) {
+      if (response.status >= 200  || response.status <=300 ) {
         toast.success("Access granted successfully!");
         return {
           success: true,

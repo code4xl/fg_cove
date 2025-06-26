@@ -66,14 +66,14 @@ export async function getSheetsData(login_role, sheetId, year, month) {
   }
 }
 
-export async function insertTodaysData(sheetId, data, subRows, subRowsClosing) {
+export async function insertTodaysData(sheetId, data, date) {
   const loadingToast = toast.loading("Inserting Today's Data...");
 
   try {
     const response = await apiConnector(
       "POST",
       `${INSERT_TODAY_API}/${sheetId}`,
-      { attributes: data, subrows: subRows, closingsubrows: subRowsClosing }
+      { attributes: data, date }
     );
     console.log("Insert Today's Data API response: ", response);
 
