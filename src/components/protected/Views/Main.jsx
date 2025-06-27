@@ -13,7 +13,7 @@ import { selectAccount } from "../../../app/DashboardSlice";
 import toast from "react-hot-toast";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { SubRows, SubRowsClosing } from "./utils/SubRows";
+import { DynamicSubRows } from "./utils/SubRows";
 
 // Updated data processing utilities for new format
 const processSheetData = (metadata, sheetsData) => {
@@ -274,17 +274,10 @@ const SheetManagement = () => {
 
   const [previousMonthRecord, setPreviousMonthRecord] = useState(null);
 
-  const [showSubrowsModal, setShowSubrowsModal] = useState(false);
-  const [subrowsData, setSubrowsData] = useState({});
-  const [currentSubrowsColumn, setCurrentSubrowsColumn] = useState("");
-  const [apiSubrowsData, setApiSubrowsData] = useState({});
-
   const [expandedRows, setExpandedRows] = useState(new Set());
-
-  const [showSubrowsClosingModal, setShowSubrowsClosingModal] = useState(false);
-  const [currentSubrowsClosingColumn, setCurrentSubrowsClosingColumn] = useState("");
-  const [subrowsClosingData, setSubrowsClosingData] = useState({});
-  const [apiSubrowsClosingData, setApiSubrowsClosingData] = useState({});
+  const [showSubrowsModal, setShowSubrowsModal] = useState(false);
+  const [currentSubrowsColumn, setCurrentSubrowsColumn] = useState(null);
+  const [subrowsData, setSubrowsData] = useState({});
 
   const shouldProcessLastRow = (sheetData) => {
     if (!sheetData || sheetData.length === 0) return false;
@@ -395,318 +388,138 @@ const SheetManagement = () => {
   }, [account]);
 
   useEffect(() => {
-  if (selectedSheetId && rawMetadata.length > 0) {
-    // Cancel previous fetch if still running
-    if (currentFetchRef.current) {
-      currentFetchRef.current = true; // Mark as cancelled
+    if (selectedSheetId && rawMetadata.length > 0) {
+      // Cancel previous fetch if still running
+      if (currentFetchRef.current) {
+        currentFetchRef.current = true; // Mark as cancelled
+      }
+
+      // Clear previous month record when changing sheets
+      setPreviousMonthRecord(null);
+
+      const fetchId = Date.now(); // Unique ID for this fetch
+      currentFetchRef.current = fetchId;
+
+      console.log("Year/Month changed, refetching data for:", selectedSheetId);
+
+      const timeoutId = setTimeout(() => {
+        // Only proceed if this is still the current fetch
+        if (currentFetchRef.current === fetchId) {
+          fetchSheetData(selectedSheetId);
+        }
+      }, 100); // Small delay to debounce rapid changes
+
+      return () => {
+        clearTimeout(timeoutId);
+        if (currentFetchRef.current === fetchId) {
+          currentFetchRef.current = null;
+        }
+      };
     }
-
-    // Clear previous month record when changing sheets
-    setPreviousMonthRecord(null);
-
-    const fetchId = Date.now(); // Unique ID for this fetch
-    currentFetchRef.current = fetchId;
-
-    console.log("Year/Month changed, refetching data for:", selectedSheetId);
-
-    const timeoutId = setTimeout(() => {
-      // Only proceed if this is still the current fetch
-      if (currentFetchRef.current === fetchId) {
-        fetchSheetData(selectedSheetId);
-      }
-    }, 100); // Small delay to debounce rapid changes
-
-    return () => {
-      clearTimeout(timeoutId);
-      if (currentFetchRef.current === fetchId) {
-        currentFetchRef.current = null;
-      }
-    };
-  }
-}, [selectedYear, selectedMonth, selectedSheetId, rawMetadata.length]);
-
-  // const fetchSheetData = async (sheetId) => {
-  //   if (!sheetId) return;
-
-  //   const fetchId = currentFetchRef.current;
-  //   setLoading(true);
-
-  //   try {
-  //     console.log(
-  //       `Fetching data for sheet: ${sheetId}, year: ${selectedYear}, month: ${selectedMonth}`
-  //     );
-
-  //     const sheetData = await getSheetsData(
-  //       account?.role,
-  //       sheetId,
-  //       selectedYear,
-  //       selectedMonth
-  //     );
-
-  //     // Check if this fetch was cancelled
-  //     if (currentFetchRef.current !== fetchId) {
-  //       console.log("Fetch cancelled, ignoring response");
-  //       return;
-  //     }
-
-  //     console.log("Raw API response:", sheetData);
-
-  //     // Validate that sheetData is an array
-  //     const validData = Array.isArray(sheetData) ? sheetData : [];
-  //     console.log("Valid data to store:", validData);
-
-  //     // Process last row if it has date = "0"
-  //     const wasUpdated = await processLastRowWithZeroDate(validData, sheetId);
-
-  //     if (wasUpdated) {
-  //       // Refetch data after update
-  //       console.log("Refetching data after updating last row...");
-  //       const refreshedSheetData = await getSheetsData(
-  //         account?.role,
-  //         sheetId,
-  //         selectedYear,
-  //         selectedMonth
-  //       );
-
-  //       // Check if fetch was cancelled during refetch
-  //       if (currentFetchRef.current !== fetchId) {
-  //         console.log("Refetch cancelled, ignoring response");
-  //         return;
-  //       }
-
-  //       const refreshedValidData = Array.isArray(refreshedSheetData)
-  //         ? refreshedSheetData
-  //         : [];
-  //       console.log("Refreshed data after update:", refreshedValidData);
-
-  //       setRawSheetsData((prev) => {
-  //         const newData = {
-  //           ...prev,
-  //           [sheetId]: refreshedValidData,
-  //         };
-  //         console.log("Updated rawSheetsData after refresh:", newData);
-  //         return newData;
-  //       });
-  //     } else {
-  //       // No update needed, use original data
-  //       setRawSheetsData((prev) => {
-  //         const newData = {
-  //           ...prev,
-  //           [sheetId]: validData,
-  //         };
-  //         console.log("Updated rawSheetsData:", newData);
-  //         return newData;
-  //       });
-  //     }
-  //   } catch (error) {
-  //     // Only handle error if fetch wasn't cancelled
-  //     if (currentFetchRef.current === fetchId) {
-  //       console.error("Error fetching sheet data:", error);
-  //       setRawSheetsData((prev) => ({
-  //         ...prev,
-  //         [sheetId]: [],
-  //       }));
-  //     }
-  //   } finally {
-  //     if (currentFetchRef.current === fetchId) {
-  //       setLoading(false);
-  //     }
-  //   }
-  // };
+  }, [selectedYear, selectedMonth, selectedSheetId, rawMetadata.length]);
 
   const fetchSheetData = async (sheetId) => {
-  if (!sheetId) return;
+    if (!sheetId) return;
 
-  const fetchId = currentFetchRef.current;
-  setLoading(true);
+    const fetchId = currentFetchRef.current;
+    setLoading(true);
 
-  try {
-    console.log(
-      `Fetching data for sheet: ${sheetId}, year: ${selectedYear}, month: ${selectedMonth}`
-    );
+    try {
+      console.log(
+        `Fetching data for sheet: ${sheetId}, year: ${selectedYear}, month: ${selectedMonth}`
+      );
 
-    const sheetData = await getSheetsData(
-      account?.role,
-      sheetId,
-      selectedYear,
-      selectedMonth
-    );
-
-    // Check if this fetch was cancelled
-    if (currentFetchRef.current !== fetchId) {
-      console.log("Fetch cancelled, ignoring response");
-      return;
-    }
-
-    console.log("Raw API response:", sheetData);
-
-    // Validate that sheetData is an array
-    let validData = Array.isArray(sheetData) ? sheetData : [];
-    
-    // Extract subrows data 
-    const extractedSubrows = {};
-    validData.forEach((row, rowIndex) => {
-      if (row.subrows && row.subrows.length > 0) {
-        extractedSubrows[rowIndex] = row.subrows;
-      }
-    });
-    
-    console.log("Extracted subrows data:", extractedSubrows);
-
-    const extractedClosingSubrows = {};
-    validData.forEach((row, rowIndex) => {
-      if (row.closingsubrows && row.closingsubrows.length > 0) {
-        extractedClosingSubrows[rowIndex] = row.closingsubrows;
-      }
-    });
-
-    console.log("Extracted closing stock subrows data:", extractedClosingSubrows);
-    
-    // Check for and store previous
-    let previousMonthRec = null;
-    let adjustedSubrows = extractedSubrows;
-    let adjustedClosingSubrows  = extractedClosingSubrows;
-    
-    if (validData.length > 0) {
-      const firstRecord = validData[0];
-      if (firstRecord?.attributes?.[0]) {
-        const isFromPreviousMonth = isPreviousMonthRecord(
-          firstRecord.attributes[0], 
-          selectedMonth, 
-          selectedYear
-        );
-        if (isFromPreviousMonth) {
-          console.log("Found and storing previous month record:", firstRecord);
-          previousMonthRec = firstRecord;
-          // Remove it from the data that will be stored in rawSheetsData
-          validData = validData.slice(1);
-          
-          // Adjust subrows indices after removing previous month record
-          adjustedSubrows = {};
-          Object.keys(extractedSubrows).forEach(key => {
-            const index = parseInt(key);
-            if (index > 0) {
-              adjustedSubrows[index - 1] = extractedSubrows[key];
-            }
-          });
-
-          adjustedClosingSubrows = {};
-          Object.keys(extractedClosingSubrows).forEach(key => {
-            const index = parseInt(key);
-            if (index > 0) {
-              adjustedClosingSubrows[index - 1] = extractedClosingSubrows[key];
-            }
-          });
-
-        }
-      }
-    }
-
-    // Store the adjusted subrows data
-    setApiSubrowsData(adjustedSubrows);
-    setApiSubrowsClosingData(adjustedClosingSubrows);
-    
-    // Store the previous month record in state
-    setPreviousMonthRecord(previousMonthRec);
-    
-    console.log("Valid data to store (excluding previous month):", validData);
-    console.log("Final subrows data:", adjustedSubrows);
-    console.log("Final closing subrows data:", adjustedClosingSubrows);
-
-    // Process last row if it has date = "0"
-    const wasUpdated = await processLastRowWithZeroDate(validData, sheetId);
-
-    if (wasUpdated) {
-      // For refresh, we'll call fetchSheetData again, so no need to duplicate logic here
-      const refreshedSheetData = await getSheetsData(
+      const sheetData = await getSheetsData(
         account?.role,
         sheetId,
         selectedYear,
         selectedMonth
       );
 
+      // Check if this fetch was cancelled
       if (currentFetchRef.current !== fetchId) {
+        console.log("Fetch cancelled, ignoring response");
         return;
       }
 
-      let refreshedValidData = Array.isArray(refreshedSheetData) ? refreshedSheetData : [];
+      console.log("Raw API response:", sheetData);
+
+      // Validate that sheetData is an array
+      let validData = Array.isArray(sheetData) ? sheetData : [];
       
-      // Extract subrows from refreshed data
-      const refreshedSubrows = {};
-      const refreshedClosingSubrows = {};
-      refreshedValidData.forEach((row, rowIndex) => {
-        if (row.subrows && row.subrows.length > 0) {
-          refreshedSubrows[rowIndex] = row.subrows;
-        }
-        if (row.subrows && row.subrows.length > 0) {
-          refreshedClosingSubrows[rowIndex] = row.subrows;
-        }
-      });
-      
-      // Handle previous month record in refreshed data
-      let refreshedAdjustedSubrows = refreshedSubrows;
-      let refreshedAdjustedClosingSubrows = refreshedClosingSubrows;
-      if (refreshedValidData.length > 0) {
-        const firstRefreshedRecord = refreshedValidData[0];
-        if (firstRefreshedRecord?.attributes?.[0]) {
+
+      // Check for and store previous
+      let previousMonthRec = null;
+
+      if (validData.length > 0) {
+        const firstRecord = validData[0];
+        if (firstRecord?.attributes?.[0]) {
           const isFromPreviousMonth = isPreviousMonthRecord(
-            firstRefreshedRecord.attributes[0], 
-            selectedMonth, 
+            firstRecord.attributes[0],
+            selectedMonth,
             selectedYear
           );
           if (isFromPreviousMonth) {
-            refreshedValidData = refreshedValidData.slice(1);
-            
-            // Adjust refreshed subrows indices
-            refreshedAdjustedSubrows = {};
-            refreshedAdjustedClosingSubrows = {};
-            Object.keys(refreshedSubrows).forEach(key => {
-              const index = parseInt(key);
-              if (index > 0) {
-                refreshedAdjustedSubrows[index - 1] = refreshedSubrows[key];
-              }
-            });
-            Object.keys(refreshedClosingSubrows).forEach(key => {
-              const index = parseInt(key);
-              if (index > 0) {
-                refreshedAdjustedClosingSubrows[index - 1] = refreshedClosingSubrows[key];
-              }
-            });
+            console.log(
+              "Found and storing previous month record:",
+              firstRecord
+            );
+            previousMonthRec = firstRecord;
+            // Remove it from the data that will be stored in rawSheetsData
+            validData = validData.slice(1);
           }
         }
       }
-      
-      setApiSubrowsData(refreshedAdjustedSubrows);
-      setApiSubrowsClosingData(refreshedAdjustedClosingSubrows);
-      setRawSheetsData((prev) => ({
-        ...prev,
-        [sheetId]: refreshedValidData,
-      }));
-      setTimestampsData(extractTimestamps(refreshedValidData));
-    } else {
-      setRawSheetsData((prev) => ({
-        ...prev,
-        [sheetId]: validData,
-      }));
-      setTimestampsData(extractTimestamps(validData));
+
+      // Store the previous month record in state
+      setPreviousMonthRecord(previousMonthRec);
+
+      console.log("Valid data to store (excluding previous month):", validData);
+
+      // Process last row if it has date = "0"
+      const wasUpdated = await processLastRowWithZeroDate(validData, sheetId);
+
+      if (wasUpdated) {
+        // For refresh, we'll call fetchSheetData again, so no need to duplicate logic here
+        const refreshedSheetData = await getSheetsData(
+          account?.role,
+          sheetId,
+          selectedYear,
+          selectedMonth
+        );
+
+        if (currentFetchRef.current !== fetchId) {
+          return;
+        }
+
+        setRawSheetsData((prev) => ({
+          ...prev,
+          [sheetId]: refreshedValidData,
+        }));
+        setTimestampsData(extractTimestamps(refreshedValidData));
+      } else {
+        setRawSheetsData((prev) => ({
+          ...prev,
+          [sheetId]: validData,
+        }));
+        setTimestampsData(extractTimestamps(validData));
+      }
+    } catch (error) {
+      if (currentFetchRef.current === fetchId) {
+        console.error("Error fetching sheet data:", error);
+        setRawSheetsData((prev) => ({
+          ...prev,
+          [sheetId]: [],
+        }));
+        setPreviousMonthRecord(null);
+      }
+    } finally {
+      if (currentFetchRef.current === fetchId) {
+        setLoading(false);
+      }
     }
-  } catch (error) {
-    if (currentFetchRef.current === fetchId) {
-      console.error("Error fetching sheet data:", error);
-      setRawSheetsData((prev) => ({
-        ...prev,
-        [sheetId]: [],
-      }));
-      setPreviousMonthRecord(null);
-      setApiSubrowsData({});
-      setApiSubrowsClosingData({});
-    }
-  } finally {
-    if (currentFetchRef.current === fetchId) {
-      setLoading(false);
-    }
-  }
-};
+  };
+
   useEffect(() => {
     if (selectedSheetId && rawMetadata && rawMetadata.length > 0) {
       if (rawSheetsData[selectedSheetId]) {
@@ -739,37 +552,33 @@ const SheetManagement = () => {
 
   // Refresh data function
   const refreshData = async () => {
-  try {
-    setLoading(true);
+    try {
+      setLoading(true);
 
-    // Reset fetch tracking
-    initialFetchRef.current = false;
-    currentFetchRef.current = null;
+      // Reset fetch tracking
+      initialFetchRef.current = false;
+      currentFetchRef.current = null;
 
-    // Clear previous month record
-    setPreviousMonthRecord(null);
-    setApiSubrowsData({});
-    setSubrowsData({});
-    setApiSubrowsClosingData({});
-    setSubrowsClosingData({});
+      // Clear previous month record
+      setPreviousMonthRecord(null);
+      setSubrowsData({});
 
+      // Refresh metadata
+      const freshMetadata = await fetchMetadata(account?.role || "user");
+      setRawMetadata(freshMetadata || []);
 
-    // Refresh metadata
-    const freshMetadata = await fetchMetadata(account?.role || "user");
-    setRawMetadata(freshMetadata || []);
+      // Refresh current sheet data with selected year/month
+      if (selectedSheetId) {
+        await fetchSheetData(selectedSheetId);
+      }
 
-    // Refresh current sheet data with selected year/month
-    if (selectedSheetId) {
-      await fetchSheetData(selectedSheetId);
+      console.log("Data refreshed successfully");
+    } catch (error) {
+      console.error("Error refreshing data:", error);
+    } finally {
+      setLoading(false);
     }
-
-    console.log("Data refreshed successfully");
-  } catch (error) {
-    console.error("Error refreshing data:", error);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const currentSheet = processedData.find(
     (sheet) => sheet["_id"] === selectedSheetId
@@ -828,6 +637,7 @@ const SheetManagement = () => {
 
   const convertDateFormat = (dateString, isInputToDisplay = true) => {
     if (isInputToDisplay) {
+      // Convert yyyy-mm-dd to display format (dd MMM yyyy)
       const date = new Date(dateString);
       return date.toLocaleDateString("en-GB", {
         day: "numeric",
@@ -835,8 +645,14 @@ const SheetManagement = () => {
         year: "numeric",
       });
     } else {
-      const date = new Date(dateString);
-      return date.toISOString().split("T")[0];
+      // Convert display format to yyyy-mm-dd
+      try {
+        const date = new Date(dateString);
+        return date.toISOString().split("T")[0];
+      } catch (error) {
+        console.error("Error converting date:", error);
+        return new Date().toISOString().split("T")[0]; // Fallback to today
+      }
     }
   };
 
@@ -942,16 +758,19 @@ const SheetManagement = () => {
     setModalType("update");
 
     console.log("Row clicked:", rowIndex);
-    console.log("Available subrows for this row:", apiSubrowsData[rowIndex]);
 
     const rowData = {};
-    
+
     currentSheet.attributes.forEach((attr, cellIndex) => {
       const columnType = getColumnType(attr);
 
       if (columnType === "recurrent") {
         if (attr.recurrentCheck?.recurrenceFeedStatus) {
-          rowData[attr.name] = calculateRecurrentValue(attr, cellIndex, rowIndex);
+          rowData[attr.name] = calculateRecurrentValue(
+            attr,
+            cellIndex,
+            rowIndex
+          );
         } else {
           const storedValue = attr.data[rowIndex] || "";
           if (!storedValue) {
@@ -1032,229 +851,6 @@ const SheetManagement = () => {
 
   // const handleModalSubmit = async () => {
   //   let updatedSheet = { ...currentSheet };
-
-  //   const validationErrors = [];
-
-  //   Object.keys(modalData).forEach((fieldName) => {
-  //     const value = modalData[fieldName];
-  //     const attribute = currentSheet.attributes.find(
-  //       (attr) => attr.name === fieldName
-  //     );
-
-  //     if (!attribute) return;
-
-  //     const columnType = getColumnType(attribute);
-  //     const isDateField =
-  //       fieldName.toLowerCase() === "date" ||
-  //       currentSheet.attributes.indexOf(attribute) === 0;
-  //     const isDepartmentField = fieldName.toLowerCase().includes("department");
-
-  //     // Skip validation for special fields
-  //     if (
-  //       columnType === "derived" ||
-  //       columnType === "referenced" ||
-  //       columnType === "recurrent" ||
-  //       isDateField
-  //     ) {
-  //       return;
-  //     }
-
-  //     // Validate department fields
-  //     if (isDepartmentField) {
-  //       const stringRegex = /^[a-zA-Z\s\-\.,']+$/;
-  //       if (value && !stringRegex.test(value)) {
-  //         validationErrors.push(
-  //           `${fieldName}: Only letters and basic punctuation allowed`
-  //         );
-  //       }
-  //     } else {
-  //       // Validate number fields
-  //       const numberRegex = /^-?\d*\.?\d*$/;
-  //       if (value && !numberRegex.test(value)) {
-  //         validationErrors.push(`${fieldName}: Only numeric values allowed`);
-  //       }
-  //     }
-  //   });
-
-  //   // Show validation errors if any
-  //   if (validationErrors.length > 0) {
-  //     toast.error(`Validation errors:\n${validationErrors.join("\n")}`);
-  //     return;
-  //   }
-
-  //   if (modalType === "insert") {
-  //     // Create new insert array with same length as attributes, initially filled with 0
-  //     const newInsertArray = new Array(currentSheet.attributes.length).fill(0);
-
-  //     // Set today's date in the first position
-  //     const today = new Date();
-  //     const formattedDate = today.toLocaleDateString("en-GB", {
-  //       day: "numeric",
-  //       month: "short",
-  //       year: "numeric",
-  //     });
-  //     newInsertArray[0] = formattedDate;
-
-  //     // Place values from modalData into correct positions based on attribute names
-  //     Object.keys(modalData).forEach((fieldName) => {
-  //       const attributeIndex = currentSheet.attributes.findIndex(
-  //         (attr) => attr.name === fieldName
-  //       );
-  //       if (
-  //         attributeIndex !== -1 &&
-  //         !currentSheet.attributes[attributeIndex].derived
-  //       ) {
-  //         const value = modalData[fieldName];
-  //         const processedValue =
-  //           attributeIndex !== 0 && !isNaN(value) && value !== ""
-  //             ? Number(value)
-  //             : value;
-  //         newInsertArray[attributeIndex] = processedValue;
-  //       }
-  //     });
-
-  //     // Calculate derived columns
-  //     currentSheet.attributes.forEach((attr, attrIndex) => {
-  //       if (attr.derived && attr.formula) {
-  //         let calculatedValue = 0;
-
-  //         if (
-  //           attr.formula.additionIndices &&
-  //           attr.formula.additionIndices.length > 0
-  //         ) {
-  //           attr.formula.additionIndices.forEach((idx) => {
-  //             const value = newInsertArray[idx];
-  //             if (typeof value === "number") {
-  //               calculatedValue += value;
-  //             }
-  //           });
-  //         }
-
-  //         if (
-  //           attr.formula.subtractionIndices &&
-  //           attr.formula.subtractionIndices.length > 0
-  //         ) {
-  //           attr.formula.subtractionIndices.forEach((idx) => {
-  //             const value = newInsertArray[idx];
-  //             if (typeof value === "number") {
-  //               calculatedValue -= value;
-  //             }
-  //           });
-  //         }
-
-  //         newInsertArray[attrIndex] = calculatedValue;
-  //       }
-  //     });
-
-  //     console.log("Insert data array:", newInsertArray);
-
-  //     // Add new data to processed sheet for local state update
-  //     updatedSheet.attributes.forEach((attr, attrIndex) => {
-  //       updatedSheet.attributes[attrIndex].data.push(newInsertArray[attrIndex]);
-  //     });
-
-  //     // Update processed data locally
-  //     const newProcessedData = processedData.map((sheet) =>
-  //       sheet["_id"] === selectedSheetId ? updatedSheet : sheet
-  //     );
-  //     setProcessedData(newProcessedData);
-
-  //     // Call API with the new insert array
-  //     await insertTodaysData(selectedSheetId, newInsertArray);
-  //   } else if (modalType === "update" && selectedRowIndex !== null) {
-  //     // Create updated row array with same length as attributes
-  //     const updatedRowArray = [
-  //       ...updatedSheet.attributes.map(
-  //         (attr, attrIndex) => attr.data[selectedRowIndex]
-  //       ),
-  //     ];
-
-  //     // Place values from modalData into correct positions based on attribute names
-  //     Object.keys(modalData).forEach((fieldName) => {
-  //       const attributeIndex = currentSheet.attributes.findIndex(
-  //         (attr) => attr.name === fieldName
-  //       );
-  //       if (
-  //         attributeIndex !== -1 &&
-  //         !currentSheet.attributes[attributeIndex].derived &&
-  //         !currentSheet.attributes[attributeIndex].recurrentCheck
-  //           ?.isRecurrent && // Skip recurrent columns
-  //         !currentSheet.attributes[attributeIndex].linkedFrom?.sheetObjectId
-  //       ) {
-  //         const value = modalData[fieldName];
-  //         const processedValue =
-  //           attributeIndex !== 0 && !isNaN(value) && value !== ""
-  //             ? Number(value)
-  //             : value;
-  //         updatedRowArray[attributeIndex] = processedValue;
-  //       }
-  //     });
-
-  //     // Calculate derived columns for the updated row
-  //     currentSheet.attributes.forEach((attr, attrIndex) => {
-  //       if (attr.derived && attr.formula) {
-  //         let calculatedValue = 0;
-
-  //         if (
-  //           attr.formula.additionIndices &&
-  //           attr.formula.additionIndices.length > 0
-  //         ) {
-  //           attr.formula.additionIndices.forEach((idx) => {
-  //             const value = updatedRowArray[idx];
-  //             if (typeof value === "number") {
-  //               calculatedValue += value;
-  //             }
-  //           });
-  //         }
-
-  //         if (
-  //           attr.formula.subtractionIndices &&
-  //           attr.formula.subtractionIndices.length > 0
-  //         ) {
-  //           attr.formula.subtractionIndices.forEach((idx) => {
-  //             const value = updatedRowArray[idx];
-  //             if (typeof value === "number") {
-  //               calculatedValue -= value;
-  //             }
-  //           });
-  //         }
-
-  //         updatedRowArray[attrIndex] = calculatedValue;
-  //       }
-  //     });
-
-  //     console.log("Updated row array:", updatedRowArray);
-
-  //     // Update the specific row in the processed sheet
-  //     updatedSheet.attributes.forEach((attr, attrIndex) => {
-  //       updatedSheet.attributes[attrIndex].data[selectedRowIndex] =
-  //         updatedRowArray[attrIndex];
-  //     });
-
-  //     // Update processed data locally
-  //     const newProcessedData = processedData.map((sheet) =>
-  //       sheet["_id"] === selectedSheetId ? updatedSheet : sheet
-  //     );
-  //     setProcessedData(newProcessedData);
-
-  //     const targetDate = timestampsData[selectedRowIndex]?.createdAt;
-  //     console.log(targetDate);
-
-  //     // Call API with the updated row array and row index
-  //     await updateRowData(selectedSheetId, {
-  //       rowIndex: selectedRowIndex,
-  //       attributes: updatedRowArray,
-  //       targetDate: targetDate,
-  //     });
-  //   }
-
-  //   setShowModal(false);
-  //   setModalData({});
-  //   setSelectedRowIndex(null);
-  // };
-
-  // const handleModalSubmit = async () => {
-  //   let updatedSheet = { ...currentSheet };
   //   let needsMetadataUpdate = false;
   //   let updatedAttributes = [];
 
@@ -1263,43 +859,60 @@ const SheetManagement = () => {
   //     const newInsertArray = new Array(currentSheet.attributes.length).fill(0);
 
   //     // Set today's date in the first position
-  //     const today = new Date();
-  //     const formattedDate = today.toLocaleDateString("en-GB", {
-  //       day: "numeric",
-  //       month: "short",
-  //       year: "numeric",
-  //     });
-  //     newInsertArray[0] = formattedDate;
+  //     const selectedDate = modalData[currentSheet.attributes[0].name];
+  //     newInsertArray[0] = selectedDate || getTodaysDate();
+
+  //     // Get current sheet data for recurrent value calculations
+  //     const currentSheetData = rawSheetsData[selectedSheetId] || [];
 
   //     // Place values from modalData into correct positions based on attribute names
-  //     Object.keys(modalData).forEach((fieldName) => {
-  //       const attributeIndex = currentSheet.attributes.findIndex(
-  //         (attr) => attr.name === fieldName
-  //       );
+  //     currentSheet.attributes.forEach((attribute, attributeIndex) => {
+  //       const fieldName = attribute.name;
 
-  //       if (attributeIndex !== -1) {
-  //         const attribute = currentSheet.attributes[attributeIndex];
+  //       // Skip date field (already set) and derived fields
+  //       if (attributeIndex === 0 || attribute.derived) {
+  //         return;
+  //       }
 
-  //         const isRecurrentEditable =
-  //           attribute.recurrentCheck?.isRecurrent &&
-  //           !attribute.recurrentCheck?.recurrenceFedStatus;
+  //       const isRecurrentColumn = attribute.recurrentCheck?.isRecurrent;
+  //       const isRecurrentEditable =
+  //         isRecurrentColumn && !attribute.recurrentCheck?.recurrenceFedStatus;
+  //       const isRecurrentWithFeedStatus =
+  //         isRecurrentColumn && attribute.recurrentCheck?.recurrenceFedStatus;
 
-  //         if (
-  //           !attribute.derived &&
-  //           !attribute.linkedFrom?.sheetObjectId &&
-  //           (isRecurrentEditable || !attribute.recurrentCheck?.isRecurrent)
-  //         ) {
-  //           const value = modalData[fieldName];
+  //       if (isRecurrentWithFeedStatus) {
+  //         // For recurrent columns with feedStatus true, use the value from modalData
+  //         // (which was auto-populated from previous month or modified by add-on)
+  //         const value = modalData[fieldName];
+  //         if (value !== undefined && value !== "") {
   //           const processedValue =
-  //             attributeIndex !== 0 && !isNaN(value) && value !== ""
-  //               ? Number(value)
-  //               : value;
+  //             !isNaN(value) && value !== "" ? Number(value) : 0;
   //           newInsertArray[attributeIndex] = processedValue;
-
-  //           // Check if we need to update recurrenceFedStatus
-  //           if (isRecurrentEditable && value && value !== "") {
-  //             needsMetadataUpdate = true;
-  //           }
+  //         } else {
+  //           // Fallback to getting the value directly from previous month
+  //           const autoValue = getRecurrentValueFromPreviousMonth(
+  //             attribute,
+  //             currentSheetData
+  //           );
+  //           newInsertArray[attributeIndex] =
+  //             !isNaN(autoValue) && autoValue !== "" ? Number(autoValue) : 0;
+  //         }
+  //       } else if (isRecurrentEditable) {
+  //         // For recurrent columns with feedStatus false, use user input
+  //         const value = modalData[fieldName];
+  //         if (value !== undefined && value !== "") {
+  //           const processedValue =
+  //             !isNaN(value) && value !== "" ? Number(value) : 0;
+  //           newInsertArray[attributeIndex] = processedValue;
+  //           needsMetadataUpdate = true; // Will update feedStatus to true
+  //         }
+  //       } else if (!attribute.linkedFrom?.sheetObjectId) {
+  //         // For normal columns, use user input
+  //         const value = modalData[fieldName];
+  //         if (value !== undefined && value !== "") {
+  //           const processedValue =
+  //             !isNaN(value) && value !== "" ? Number(value) : value;
+  //           newInsertArray[attributeIndex] = processedValue;
   //         }
   //       }
   //     });
@@ -1349,9 +962,14 @@ const SheetManagement = () => {
   //       sheet["_id"] === selectedSheetId ? updatedSheet : sheet
   //     );
   //     setProcessedData(newProcessedData);
-
+  //     const displayDate = newInsertArray[0];
+  //     const apiDate = convertDateFormat(displayDate, false);
   //     // Call API with the new insert array
-  //     await insertTodaysData(selectedSheetId, newInsertArray);
+  //     await insertTodaysData(
+  //       selectedSheetId,
+  //       newInsertArray,
+  //       apiDate
+  //     );
   //   } else if (modalType === "update" && selectedRowIndex !== null) {
   //     // Create updated row array with same length as attributes
   //     const updatedRowArray = [
@@ -1359,6 +977,7 @@ const SheetManagement = () => {
   //         (attr, attrIndex) => attr.data[selectedRowIndex]
   //       ),
   //     ];
+  //     console.log("Updated row array:", updatedRowArray);
 
   //     // Place values from modalData into correct positions based on attribute names
   //     Object.keys(modalData).forEach((fieldName) => {
@@ -1369,15 +988,17 @@ const SheetManagement = () => {
   //       if (attributeIndex !== -1) {
   //         const attribute = currentSheet.attributes[attributeIndex];
 
-  //         // Allow update for recurrent columns that don't have feedStatus true
+  //         // For recurrent columns, ALWAYS use the value from modalData (which includes add-on values)
+  //         const isRecurrentColumn = attribute.recurrentCheck?.isRecurrent;
   //         const isRecurrentEditable =
-  //           attribute.recurrentCheck?.isRecurrent &&
-  //           !attribute.recurrentCheck?.recurrenceFedStatus;
+  //           isRecurrentColumn && !attribute.recurrentCheck?.recurrenceFedStatus;
 
   //         if (
   //           !attribute.derived &&
   //           !attribute.linkedFrom?.sheetObjectId &&
-  //           (isRecurrentEditable || !attribute.recurrentCheck?.isRecurrent)
+  //           (isRecurrentEditable ||
+  //             !isRecurrentColumn ||
+  //             (isRecurrentColumn && modalData[fieldName] !== ""))
   //         ) {
   //           const value = modalData[fieldName];
   //           const processedValue =
@@ -1391,6 +1012,20 @@ const SheetManagement = () => {
   //             needsMetadataUpdate = true;
   //           }
   //         }
+  //         // For recurrent columns with feedStatus true, use modalData value if it exists (from add-on)
+  //         else if (
+  //           isRecurrentColumn &&
+  //           attribute.recurrentCheck?.recurrenceFedStatus &&
+  //           modalData[fieldName] !== undefined &&
+  //           modalData[fieldName] !== ""
+  //         ) {
+  //           const value = modalData[fieldName];
+  //           const processedValue =
+  //             !isNaN(value) && value !== "" ? Number(value) : value;
+  //           updatedRowArray[attributeIndex] = processedValue;
+  //         }
+  //         // Keep existing value if no modalData value for locked recurrent columns
+  //         // (this handles the case where user didn't use add-on functionality)
   //       }
   //     });
 
@@ -1505,6 +1140,25 @@ const SheetManagement = () => {
   // };
 
   const handleModalSubmit = async () => {
+    // Check if any column requires subrows input BEFORE processing
+    const subrowsColumns = currentSheet.attributes.filter(attr => shouldOpenSubrowsModal(attr));
+    
+    if (subrowsColumns.length > 0) {
+      // Check if we need to collect subrows data
+      for (const attr of subrowsColumns) {
+        const hasMainValue = modalData[attr.name] && parseFloat(modalData[attr.name]) > 0;
+        const existingSubrows = getExistingSubrowsData(attr.name, selectedRowIndex);
+        const hasSubrowsData = subrowsData[attr.name] && subrowsData[attr.name].length > 0;
+        
+        // If main value is provided but no subrows data exists, open modal
+        if (hasMainValue && existingSubrows.length === 0 && !hasSubrowsData) {
+          setCurrentSubrowsColumn(attr);
+          setShowSubrowsModal(true);
+          return; // Stop execution and wait for subrows input
+        }
+      }
+    }
+
     let updatedSheet = { ...currentSheet };
     let needsMetadataUpdate = false;
     let updatedAttributes = [];
@@ -1514,13 +1168,8 @@ const SheetManagement = () => {
       const newInsertArray = new Array(currentSheet.attributes.length).fill(0);
 
       // Set today's date in the first position
-      const today = new Date();
-      const formattedDate = today.toLocaleDateString("en-GB", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      });
-      newInsertArray[0] = formattedDate;
+      const selectedDate = modalData[currentSheet.attributes[0].name];
+      newInsertArray[0] = selectedDate || getTodaysDate();
 
       // Get current sheet data for recurrent value calculations
       const currentSheetData = rawSheetsData[selectedSheetId] || [];
@@ -1622,24 +1271,28 @@ const SheetManagement = () => {
         sheet["_id"] === selectedSheetId ? updatedSheet : sheet
       );
       setProcessedData(newProcessedData);
+      
+      const displayDate = newInsertArray[0];
+      const apiDate = convertDateFormat(displayDate, false);
+
       // Prepare subrows data for API
-      let subrovsForAPI = [];
-      let subrowsClosingForAPI = [];
-      Object.keys(subrowsData).forEach(columnName => {
-        if (subrowsData[columnName] && subrowsData[columnName].length > 0) {
-          // Add all subrows from this column to the flat array
-          subrovsForAPI = subrovsForAPI.concat(subrowsData[columnName]);
+      const subrowsForAPI = {};
+      
+      // Collect subrows data for columns that have it
+      currentSheet.attributes.forEach((attr, attrIndex) => {
+        if (shouldOpenSubrowsModal(attr) && subrowsData[attr.name]) {
+          subrowsForAPI[attrIndex.toString()] = subrowsData[attr.name];
         }
       });
 
-      Object.keys(subrowsClosingData).forEach(columnName => {
-        if (isClosingStockColumn(columnName) && subrowsClosingData[columnName] && subrowsClosingData[columnName].length > 0) {
-          subrowsClosingForAPI = subrowsClosingForAPI.concat(subrowsClosingData[columnName]);
-        }
-      });
+      // Call API with the new insert array and subrows
+      await insertTodaysData(
+        selectedSheetId,
+        newInsertArray,
+        apiDate,
+        subrowsForAPI
+      );
 
-      // Call API with the new insert array
-      await insertTodaysData(selectedSheetId, newInsertArray, subrovsForAPI, subrowsClosingForAPI);
     } else if (modalType === "update" && selectedRowIndex !== null) {
       // Create updated row array with same length as attributes
       const updatedRowArray = [
@@ -1647,63 +1300,6 @@ const SheetManagement = () => {
           (attr, attrIndex) => attr.data[selectedRowIndex]
         ),
       ];
-
-      // Prepare subrows data for update - always send complete subrows array
-      let subrovsForAPI = [];
-      let subrowsClosingForAPI = [];
-  
-      // Check if this row has opening stock columns with subrows
-      const hasOpeningStockColumn = currentSheet.attributes.some(attr => 
-        isOpeningStockColumn(attr.name)
-      );
-      const hasClosingStockColumn = currentSheet.attributes.some(attr => 
-        isClosingStockColumn(attr.name)
-      );
-      
-      if (hasOpeningStockColumn) {
-        // Priority 1: Use subrows from SubRows modal if user interacted with it
-        const hasModifiedSubrows = Object.keys(subrowsData).some(columnName => 
-          isOpeningStockColumn(columnName) && subrowsData[columnName] && subrowsData[columnName].length > 0
-        );
-        
-        if (hasModifiedSubrows) {
-          // User modified subrows through the modal
-          Object.keys(subrowsData).forEach(columnName => {
-            if (isOpeningStockColumn(columnName) && subrowsData[columnName] && subrowsData[columnName].length > 0) {
-              // subrowsData already contains subrows in API format from handleSubrowsSave
-              subrovsForAPI = subrovsForAPI.concat(subrowsData[columnName]);
-            }
-          });
-          console.log("Using modified subrows from modal:", subrovsForAPI);
-        } else {
-          // User didn't modify subrows, use original API data
-          const originalSubrows = apiSubrowsData[selectedRowIndex] || [];
-          subrovsForAPI = [...originalSubrows]; // Create a copy
-          console.log("Using original subrows data:", subrovsForAPI);
-        }
-      }
-
-      if (hasClosingStockColumn) {
-        const hasModifiedClosingSubrows = Object.keys(subrowsClosingData).some(columnName => 
-          isClosingStockColumn(columnName) && subrowsClosingData[columnName] && subrowsClosingData[columnName].length > 0
-        );
-        
-        if (hasModifiedClosingSubrows) {
-          Object.keys(subrowsClosingData).forEach(columnName => {
-            if (isClosingStockColumn(columnName) && subrowsClosingData[columnName] && subrowsClosingData[columnName].length > 0) {
-              subrowsClosingForAPI = subrowsClosingForAPI.concat(subrowsClosingData[columnName]);
-            }
-          });
-          console.log("Using modified closing stock subrows from modal:", subrowsClosingForAPI);
-        } else {
-          const originalClosingSubrows = apiSubrowsClosingData[selectedRowIndex] || [];
-          subrowsClosingForAPI = subrowsClosingForAPI.concat(originalClosingSubrows);
-          console.log("Using original closing stock subrows data:", subrowsClosingForAPI);
-        }
-      }
-      
-      console.log("Final subrows for API (update):", subrovsForAPI);
-      console.log("Final subrowsClosing for API (update):", subrowsClosingForAPI);
       console.log("Updated row array:", updatedRowArray);
 
       // Place values from modalData into correct positions based on attribute names
@@ -1718,8 +1314,7 @@ const SheetManagement = () => {
           // For recurrent columns, ALWAYS use the value from modalData (which includes add-on values)
           const isRecurrentColumn = attribute.recurrentCheck?.isRecurrent;
           const isRecurrentEditable =
-            isRecurrentColumn &&
-            !attribute.recurrentCheck?.recurrenceFedStatus;
+            isRecurrentColumn && !attribute.recurrentCheck?.recurrenceFedStatus;
 
           if (
             !attribute.derived &&
@@ -1807,13 +1402,32 @@ const SheetManagement = () => {
       const targetDate = timestampsData[selectedRowIndex]?.createdAt;
       console.log(targetDate);
 
-      // Call API with the updated row array and row index
+      // Prepare subrows data for update API
+      const subrowsForAPI = {};
+      
+      // Collect subrows data - prioritize modified data, fallback to existing data
+      currentSheet.attributes.forEach((attr, attrIndex) => {
+        if (shouldOpenSubrowsModal(attr)) {
+          // CRITICAL FIX: Always prioritize modified subrows data if it exists
+          if (subrowsData[attr.name] && subrowsData[attr.name].length > 0) {
+            // User has modified subrows - use the modified data
+            subrowsForAPI[attrIndex.toString()] = subrowsData[attr.name];
+          } else {
+            // No modifications - use existing data from API
+            const existingSubrows = getExistingSubrowsData(attr.name, selectedRowIndex);
+            if (existingSubrows.length > 0) {
+              subrowsForAPI[attrIndex.toString()] = existingSubrows;
+            }
+          }
+        }
+      });
+
+      // Call API with the updated row array, row index, and subrows
       await updateRowData(selectedSheetId, {
         rowIndex: selectedRowIndex,
         attributes: updatedRowArray,
         targetDate: targetDate,
-        subrows: subrovsForAPI,
-        closingsubrows: subrowsClosingForAPI
+        subrows: subrowsForAPI // Pass subrows data to API
       });
     }
 
@@ -1864,20 +1478,79 @@ const SheetManagement = () => {
       }
     }
 
+    // Clear subrows data after successful save
+    setSubrowsData({});
     setShowModal(false);
     setModalData({});
     setSelectedRowIndex(null);
-    setSubrowsData({});
-    setSubrowsClosingData({});
   };
+  // const handleInputChange = (fieldName, value) => {
+  //   // Find the attribute to check its type
+  //   const attribute = currentSheet.attributes.find(
+  //     (attr) => attr.name === fieldName
+  //   );
+
+  //   // Check if this is a date field or derived field
+  //   const isDateField =
+  //     fieldName.toLowerCase() === "date" ||
+  //     (attribute && currentSheet.attributes.indexOf(attribute) === 0);
+  //   const isDerivedField = attribute?.derived;
+  //   const isReferencedField = attribute?.linkedFrom?.sheetObjectId;
+  //   const isRecurrentField = attribute?.recurrentCheck?.isRecurrent;
+  //   const isRecurrentEditable =
+  //     isRecurrentField && !attribute?.recurrentCheck?.recurrenceFedStatus;
+
+  //   // Always update modal data first
+  //   setModalData((prev) => ({
+  //     ...prev,
+  //     [fieldName]: value,
+  //   }));
+
+  //   // Check if this field requires subrows and has a significant value
+  //   if (shouldOpenSubrowsModal(attribute) && value && parseFloat(value) > 0) {
+  //     // Check if we already have subrows data for this field
+  //     const existingSubrows = getExistingSubrowsData(fieldName, selectedRowIndex);
+  //     const hasModifiedSubrows = subrowsData[fieldName] && subrowsData[fieldName].length > 0;
+      
+  //     // Only auto-open if no existing data and user hasn't manually entered subrows
+  //     if (existingSubrows.length === 0 && !hasModifiedSubrows) {
+  //       // Small delay to let user finish typing before opening modal
+  //       setTimeout(() => {
+  //         if (modalData[fieldName] && parseFloat(modalData[fieldName]) > 0) {
+  //           setCurrentSubrowsColumn(attribute);
+  //           setShowSubrowsModal(true);
+  //         }
+  //       }, 1500); // 1.5 second delay
+  //     }
+  //   }
+
+  //   // Skip further validation for special fields (they're already updated above)
+  //   if (
+  //     isDateField ||
+  //     isDerivedField ||
+  //     isReferencedField ||
+  //     (isRecurrentField && !isRecurrentEditable)
+  //   ) {
+  //     return;
+  //   }
+
+  //   // For regular fields, validate numeric input
+  //   // Only allow numbers (including decimals and negative numbers)
+  //   const numberRegex = /^-?\d*\.?\d*$/;
+  //   if (value !== "" && !numberRegex.test(value)) {
+  //     // If invalid input, revert to previous value
+  //     setModalData((prev) => ({
+  //       ...prev,
+  //       [fieldName]: prev[fieldName] || "",
+  //     }));
+  //   }
+  // };
+
   const handleInputChange = (fieldName, value) => {
     // Find the attribute to check its type
     const attribute = currentSheet.attributes.find(
       (attr) => attr.name === fieldName
     );
-
-    // Check if this is a department field (should only allow strings)
-    const isDepartmentField = fieldName.toLowerCase().includes("department");
 
     // Check if this is a date field or derived field
     const isDateField =
@@ -1889,41 +1562,51 @@ const SheetManagement = () => {
     const isRecurrentEditable =
       isRecurrentField && !attribute?.recurrentCheck?.recurrenceFedStatus;
 
-    // Skip validation for special fields
+    // Always update modal data first
+    setModalData((prev) => ({
+      ...prev,
+      [fieldName]: value,
+    }));
+
+    // Check if this field requires subrows and has a significant value
+    if (shouldOpenSubrowsModal(attribute) && value && parseFloat(value) > 0) {
+      // Check if we already have subrows data for this field
+      const existingSubrows = getExistingSubrowsData(fieldName, selectedRowIndex);
+      const hasModifiedSubrows = subrowsData[fieldName] && subrowsData[fieldName].length > 0;
+      
+      // Only auto-open if no existing data and user hasn't manually entered subrows
+      // AND the modal is not currently open (prevent multiple opens)
+      if (existingSubrows.length === 0 && !hasModifiedSubrows && !showSubrowsModal) {
+        // Small delay to let user finish typing before opening modal
+        setTimeout(() => {
+          // Double check conditions before opening
+          if (modalData[fieldName] && parseFloat(modalData[fieldName]) > 0 && !showSubrowsModal) {
+            setCurrentSubrowsColumn(attribute);
+            setShowSubrowsModal(true);
+          }
+        }, 1500); // 1.5 second delay
+      }
+    }
+
+    // Skip further validation for special fields (they're already updated above)
     if (
       isDateField ||
       isDerivedField ||
       isReferencedField ||
       (isRecurrentField && !isRecurrentEditable)
     ) {
-      setModalData((prev) => ({
-        ...prev,
-        [fieldName]: value,
-      }));
       return;
     }
 
-    // Validate input based on field type
-    if (isDepartmentField) {
-      // For department fields, only allow letters, spaces, and common punctuation
-      const stringRegex = /^[a-zA-Z\s\-\.,']*$/;
-      if (value === "" || stringRegex.test(value)) {
-        setModalData((prev) => ({
-          ...prev,
-          [fieldName]: value,
-        }));
-      }
-      // If invalid, don't update the value (ignore the input)
-    } else {
-      // For non-department fields, only allow numbers (including decimals)
-      const numberRegex = /^-?\d*\.?\d*$/;
-      if (value === "" || numberRegex.test(value)) {
-        setModalData((prev) => ({
-          ...prev,
-          [fieldName]: value,
-        }));
-      }
-      // If invalid, don't update the value (ignore the input)
+    // For regular fields, validate numeric input
+    // Only allow numbers (including decimals and negative numbers)
+    const numberRegex = /^-?\d*\.?\d*$/;
+    if (value !== "" && !numberRegex.test(value)) {
+      // If invalid input, revert to previous value
+      setModalData((prev) => ({
+        ...prev,
+        [fieldName]: prev[fieldName] || "",
+      }));
     }
   };
 
@@ -1959,6 +1642,37 @@ const SheetManagement = () => {
       derived:
         columnData.additionIndices?.length > 0 ||
         columnData.subtractionIndices?.length > 0,
+
+      // NEW: Add subrows configuration
+      hasSubrows: columnData.hasSubrows || false,
+      subrowsConfig:
+        columnData.hasSubrows && columnData.subrowsConfig
+          ? {
+              subrowsEnabled: columnData.subrowsConfig.subrowsEnabled,
+              subrowColumns: columnData.subrowsConfig.subrowColumns.map(
+                (col) => ({
+                  name: col.name,
+                  type: col.type,
+                  required: col.required,
+                  autoIncrement:
+                    col.type === "number" &&
+                    col.name.toLowerCase().includes("sr")
+                      ? true
+                      : false,
+                  isAggregateField:
+                    col.name === columnData.subrowsConfig.aggregateField,
+                })
+              ),
+              aggregationType:
+                columnData.subrowsConfig.aggregationType || "sum",
+              aggregateField: columnData.subrowsConfig.aggregateField,
+            }
+          : {
+              subrowsEnabled: false,
+              subrowColumns: [],
+              aggregationType: "sum",
+              aggregateField: null,
+            },
     };
 
     // Get current sheet metadata and add new column
@@ -2063,16 +1777,64 @@ const SheetManagement = () => {
             columnData.additionIndices?.length > 0 ||
             columnData.subtractionIndices?.length > 0 ||
             attr.derived,
+          
+          // NEW: Update subrows configuration
+          hasSubrows: !!columnData.hasSubrows, // Force boolean conversion
+      
+          // FIX: Update subrowsConfig properly
+          subrowsConfig: columnData.hasSubrows && columnData.subrowsConfig ? {
+            subrowsEnabled: columnData.subrowsConfig.subrowsEnabled,
+            subrowColumns: columnData.subrowsConfig.subrowColumns.map(col => ({
+              name: col.name,
+              type: col.type,
+              required: col.required,
+              autoIncrement: col.type === 'number' && col.name.toLowerCase().includes('sr') ? true : false,
+              options: col.options || [],
+              isAggregateField: col.name === columnData.subrowsConfig.aggregateField
+            })),
+            aggregationType: columnData.subrowsConfig.aggregationType || "sum",
+            aggregateField: columnData.subrowsConfig.aggregateField
+          } : columnData.hasSubrows ? {
+            // If hasSubrows is true but no config provided, create default
+            subrowsEnabled: false,
+            subrowColumns: [],
+            aggregationType: "sum",
+            aggregateField: null
+          } : attr.subrowsConfig || {
+            // If hasSubrows is false, keep existing config or create default
+            subrowsEnabled: false,
+            subrowColumns: [],
+            aggregationType: "sum",
+            aggregateField: null
+          }
         };
       }
       return attr;
     });
 
+    // Determine if formula actually changed for derived columns
+    const originalAttr = currentSheetMeta.attributes[selectedColumnIndex];
+    let formulaChanged = false;
+
+    if (originalAttr.derived || (columnData.additionIndices?.length > 0 || columnData.subtractionIndices?.length > 0)) {
+      // Check if addition indices changed
+      const originalAdditions = originalAttr.formula?.additionIndices || [];
+      const newAdditions = columnData.additionIndices || [];
+      
+      // Check if subtraction indices changed
+      const originalSubtractions = originalAttr.formula?.subtractionIndices || [];
+      const newSubtractions = columnData.subtractionIndices || [];
+      
+      formulaChanged = 
+        JSON.stringify(originalAdditions.sort()) !== JSON.stringify(newAdditions.sort()) ||
+        JSON.stringify(originalSubtractions.sort()) !== JSON.stringify(newSubtractions.sort());
+    }
+
     // Create updated sheet metadata
     const updatedCurrentSheetMeta = {
       ...currentSheetMeta,
       attributes: updatedAttributes,
-      formulaChange: [selectedColumnIndex],
+      formulaChange: formulaChanged ? [selectedColumnIndex] : [],
       nameChange: false,
     };
 
@@ -2094,7 +1856,23 @@ const SheetManagement = () => {
         // Check if recurrent changed
         originalAttr.recurrentCheck?.isRecurrent !== !!columnData.recurrent ||
         originalAttr.recurrentCheck?.recurrentReferenceIndice !==
-          columnData.recurrent?.referenceColumnIndex
+          columnData.recurrent?.referenceColumnIndex ||
+        // NEW: Check if subrows configuration changed
+        originalAttr.hasSubrows !== columnData.hasSubrows ||
+        (originalAttr.hasSubrows && columnData.hasSubrows && (
+          originalAttr.subrowsConfig?.subrowsEnabled !== columnData.subrowsConfig?.subrowsEnabled ||
+          originalAttr.subrowsConfig?.aggregateField !== columnData.subrowsConfig?.aggregateField ||
+          originalAttr.subrowsConfig?.aggregationType !== columnData.subrowsConfig?.aggregationType ||
+          JSON.stringify(originalAttr.subrowsConfig?.subrowColumns) !== 
+          JSON.stringify(columnData.subrowsConfig?.subrowColumns?.map(col => ({
+            name: col.name,
+            type: col.type,
+            required: col.required,
+            autoIncrement: col.type === 'number' && col.name.toLowerCase().includes('sr'),
+            options: col.options || [],
+            isAggregateField: col.name === columnData.subrowsConfig.aggregateField
+          })))
+        ))
       ) {
         action = "formulaUpdate";
       }
@@ -2118,46 +1896,6 @@ const SheetManagement = () => {
     }
   };
 
-  // const handleBlankRowClick = () => {
-  //   // Check if today's data already exists
-  //   if (checkTodaysData()) {
-  //     toast.error(
-  //       "Today's data already exists. You cannot add duplicate entries for today."
-  //     );
-  //     return;
-  //   }
-
-  //   // If no today's data, open insert modal
-  //   setModalType("insert");
-  //   setSelectedRowIndex(null); // No specific row index for insert
-
-  //   // Initialize modal data with today's date for date field
-  //   const initialModalData = {};
-  //   const currentSheetData = rawSheetsData[selectedSheetId] || [];
-
-  //   currentSheet.attributes.forEach((attribute, index) => {
-  //     if (attribute.name.toLowerCase() === "date" || index === 0) {
-  //       initialModalData[attribute.name] = getTodaysDate();
-  //     } else if (attribute.recurrentCheck?.isRecurrent) {
-  //       if (attribute.recurrentCheck.recurrenceFedStatus) {
-  //         // Auto-populate from previous month if feedStatus is true
-  //         initialModalData[attribute.name] = getRecurrentValueFromPreviousMonth(
-  //           attribute,
-  //           currentSheetData
-  //         );
-  //       } else {
-  //         // Leave empty for user input if feedStatus is false
-  //         initialModalData[attribute.name] = "";
-  //       }
-  //     } else if (!attribute.derived && !attribute.linkedFrom?.sheetObjectId) {
-  //       initialModalData[attribute.name] = "";
-  //     }
-  //   });
-
-  //   setModalData(initialModalData);
-  //   setShowModal(true);
-  // };
-
   const handleBlankRowClick = () => {
     // Check if today's data already exists
     if (checkTodaysData()) {
@@ -2177,7 +1915,10 @@ const SheetManagement = () => {
 
     currentSheet.attributes.forEach((attribute, index) => {
       if (attribute.name.toLowerCase() === "date" || index === 0) {
-        initialModalData[attribute.name] = getTodaysDate();
+        initialModalData[attribute.name] = convertDateFormat(
+          new Date().toISOString().split("T")[0],
+          true
+        ); // Default to today but allow change
       } else if (attribute.recurrentCheck?.isRecurrent) {
         if (attribute.recurrentCheck.recurrenceFedStatus) {
           // Auto-populate from previous month if feedStatus is true
@@ -2208,91 +1949,6 @@ const SheetManagement = () => {
       year: "numeric",
     });
   };
-
-  // const handleSaveColumnNew = (columnData) => {
-  //   console.log("Saving new column:", columnData);
-  //   const newAttribute = {
-  //     name: columnData.name,
-  //     derived: columnType === "derived",
-  //     formula:
-  //       columnType === "derived"
-  //         ? {
-  //             additionIndices: columnData.additionIndices || [],
-  //             subtractionIndices: columnData.subtractionIndices || [],
-  //           }
-  //         : null,
-  //     linkedFrom: columnData.reference
-  //       ? {
-  //           sheetObjectId: columnData.reference.sheetId,
-  //           attributeIndice: columnData.reference.columnIndex,
-  //         }
-  //       : null,
-  //     "recurrent-check": {
-  //       isRecurrent: false,
-  //       recurrentReferenceIndice: null,
-  //       recurrenceFedStatus: false,
-  //     },
-  //     data: [],
-  //     objectId: "647f191e810c19729de860ea",
-  //     humanFormula: null,
-  //   };
-
-  //   console.log("New attribute to be added:", newAttribute);
-
-  //   // Add human formula for derived columns
-  //   if (columnType === "derived" && newAttribute.formula) {
-  //     const additionTerms = (newAttribute.formula["additionIndices"] || []).map(
-  //       (idx) => currentSheet.attributes[idx]?.name || `Column${idx}`
-  //     );
-  //     const subtractionTerms = (
-  //       newAttribute.formula["subtractionIndices"] || []
-  //     ).map((idx) => currentSheet.attributes[idx]?.name || `Column${idx}`);
-
-  //     const parts = [];
-  //     if (additionTerms.length > 0) {
-  //       parts.push(additionTerms.join(" + "));
-  //     }
-  //     if (subtractionTerms.length > 0) {
-  //       parts.push(" - " + subtractionTerms.join(" - "));
-  //     }
-  //     newAttribute.humanFormula = parts.join("");
-  //   }
-
-  //   // Calculate data for the new column
-  //   const numRows = currentSheet.attributes[0]?.data.length || 0;
-  //   if (columnType === "derived") {
-  //     // Calculate derived values
-  //     for (let i = 0; i < numRows; i++) {
-  //       const calculatedValue = calculateDerivedValue(
-  //         newAttribute.formula,
-  //         currentSheet.attributes,
-  //         i
-  //       );
-  //       newAttribute.data.push(calculatedValue);
-  //     }
-  //   } else {
-  //     // Fill with empty values for independent columns
-  //     newAttribute.data = new Array(numRows).fill("");
-  //   }
-  //   console.log("Calculated data for new attribute:", newAttribute.data);
-
-  //   // Update processed data
-  //   const updatedSheet = {
-  //     ...currentSheet,
-  //     attributes: [...currentSheet.attributes, newAttribute],
-  //   };
-
-  //   const newProcessedData = processedData.map((sheet) =>
-  //     sheet["_id"] === selectedSheetId ? updatedSheet : sheet
-  //   );
-  //   setProcessedData(newProcessedData);
-
-  //   // Update raw data
-  //   updateRawData(updatedSheet, "addColumn", null);
-  //   console.log("Updated processed data:", newProcessedData);
-  //   setShowColumnModal(false);
-  //   setColumnType(null);
-  // };
 
   const renderFormulaTooltip = (attribute, columnIndex) => {
     console.log("Rendering formula tooltip for attribute:", attribute);
@@ -2393,6 +2049,7 @@ const SheetManagement = () => {
 
     return previousPeriodValue || "0";
   };
+
   const calculateDerivedValueForDisplay = (attribute, rowIndex) => {
     // Check if this is a derived column
     if (!attribute.derived || !attribute.formula) {
@@ -2672,98 +2329,10 @@ const SheetManagement = () => {
                 })}
               </tr>
             </thead>
-            {/* <tbody className="divide-y divide-gray-200">
-              {rows.map((row, rowIndex) => {
-                const isBlankRow = rowIndex === rows.length - 1;
-                return (
-                  <tr
-                    key={rowIndex}
-                    className={`hover:bg-gray-50 cursor-pointer ${
-                      isBlankRow
-                        ? checkTodaysData()
-                          ? "display-none bg-green-50 cursor-default"
-                          : "bg-blue-50 cursor-pointer hover:bg-blue-100"
-                        : "cursor-none"
-                    }`}
-                    onClick={() =>
-                      isBlankRow
-                        ? handleBlankRowClick()
-                        : handleRowClick(rowIndex)
-                    }
-                  >
-                    {row.map((cell, cellIndex) => {
-                      const attr = currentSheet.attributes[cellIndex];
-                      const columnType = getColumnType(attr);
-                      const isDisabled =
-                        (columnType === "derived" ||
-                          columnType === "referenced") &&
-                        !isBlankRow;
-
-                      return (
-                        <td
-                          key={cellIndex}
-                          className={`px-4 py-3 whitespace-nowrap text-sm ${
-                            columnType === "derived"
-                              ? "text-gray-950"
-                              : columnType === "referenced"
-                              ? "text-gray-950"
-                              : columnType === "recurrent"
-                              ? "text-gray-950"
-                              : "text-gray-900 font-medium"
-                          } ${isDisabled ? "opacity-75" : ""} text-center`}
-                        >
-                          <div
-                            className={`${
-                              columnType === "derived" && !isBlankRow
-                                ? "bg-yellow-200 rounded-md px-3 py-1 w-full inline-block"
-                                : columnType === "referenced" && !isBlankRow
-                                ? "bg-gray-200 rounded-md w-full px-3 py-1 inline-block"
-                                : columnType === "recurrent" && !isBlankRow
-                                ? "bg-purple-200 rounded-md w-full px-3 py-1 inline-block"
-                                : ""
-                            }`}
-                          >
-                            {isBlankRow &&
-                            (columnType === "derived" ||
-                              columnType === "referenced" ||
-                              columnType === "recurrent")
-                              ? "--"
-                              : (() => {
-                                  const attr =
-                                    currentSheet.attributes[cellIndex];
-                                  let displayValue;
-                                  displayValue = cell;
-                                  return (
-                                    displayValue ||
-                                    (isBlankRow
-                                      ? checkTodaysData()
-                                        ? "Data complete"
-                                        : "Click to enter today's data"
-                                      : "0")
-                                  );
-                                })()}
-                          </div>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
-              <tr className="bg-gray-100 font-semibold border-t-2 border-gray-300">
-                {totalsRow.map((total, cellIndex) => (
-                  <td
-                    key={cellIndex}
-                    className="px-4 py-3 whitespace-nowrap text-sm text-gray-800 text-center"
-                  >
-                    {total}
-                  </td>
-                ))}
-              </tr>
-            </tbody> */}
             <tbody className="divide-y divide-gray-200">
               {rows.map((row, rowIndex) => {
                 const isBlankRow = rowIndex === rows.length - 1;
-                
+
                 return (
                   <React.Fragment key={rowIndex}>
                     {/* Main row */}
@@ -2788,9 +2357,8 @@ const SheetManagement = () => {
                           (columnType === "derived" ||
                             columnType === "referenced") &&
                           !isBlankRow;
-                        const isOpeningStock = isOpeningStockColumn(attr.name);
-                        const isExpanded = isRowExpanded(rowIndex, cellIndex);
-                        const isClosingStock = isClosingStockColumn(attr.name);
+                        const hasSubrowsEnabled = hasSubrows(attr);
+                        const isExpanded = hasSubrowsEnabled && isRowExpanded(rowIndex, cellIndex);
 
                         return (
                           <td
@@ -2803,53 +2371,48 @@ const SheetManagement = () => {
                                 : columnType === "recurrent"
                                 ? "text-gray-950"
                                 : "text-gray-900 font-medium"
-                            } ${isDisabled ? "opacity-75" : ""} text-center ${
-                              (isOpeningStock || isClosingStock) && !isBlankRow ? "cursor-pointer hover:bg-green-100/50" : ""
-                            }`}
-                            title={isOpeningStock && !isBlankRow ? "Click to view subrows" : isClosingStock && !isBlankRow ? "Click to view product details" : ""}
+                            } ${isDisabled ? "opacity-75" : ""} text-center`}
+                            onDoubleClick={(e) => {
+                              if (isBlankRow) return;
+                              if (hasSubrowsEnabled) {
+                                e.stopPropagation();
+                                handleRowDoubleClick(rowIndex, cellIndex);
+                              }
+                            }}
                           >
-                            <div
-                              className={`${
-                                columnType === "derived" && !isBlankRow
-                                  ? "bg-yellow-200 rounded-md px-3 py-1 w-full inline-block"
-                                  : columnType === "referenced" && !isBlankRow
-                                  ? "bg-gray-200 rounded-md w-full px-3 py-1 inline-block"
-                                  : columnType === "recurrent" && !isBlankRow
-                                  ? "bg-purple-200 rounded-md w-full px-3 py-1 inline-block"
-                                  : (isOpeningStock || isClosingStock) && !isBlankRow
-                                  ? " rounded-md w-full px-3 py-1 inline-block relative"
-                                  : ""
-                              }`}
-                            >
-                              {/* Main cell content */}
-                              {isBlankRow &&
-                              (columnType === "derived" ||
-                                columnType === "referenced" ||
-                                columnType === "recurrent")
-                                ? "--"
-                                : (() => {
-                                    let displayValue = cell;
-                                    return (
-                                      displayValue ||
-                                      (isBlankRow
-                                        ? checkTodaysData()
-                                          ? "Data complete"
-                                          : "Click to enter today's data"
-                                        : "0")
-                                    );
-                                  })()}
-                              
-                              {/* Expand/Collapse indicator for opening stock */}
-                              {(isOpeningStock || isClosingStock) && !isBlankRow && (
-                                <span 
-                                  className={`absolute right-1 top-1/2 hover:scale-110 text-xs cursor-pointer rounded px-1 transition-colors select-none ${
-                                    isClosingStock ? "text-orange-600" : ""
+                            <div className="flex items-center justify-center relative">
+                              <div
+                                className={`${
+                                  columnType === "derived" && !isBlankRow
+                                    ? "bg-yellow-200 rounded-md px-3 py-1 w-full inline-block"
+                                    : columnType === "referenced" && !isBlankRow
+                                    ? "bg-gray-200 rounded-md w-full px-3 py-1 inline-block"
+                                    : columnType === "recurrent" && !isBlankRow
+                                    ? "bg-purple-200 rounded-md w-full px-3 py-1 inline-block"
+                                    : ""
+                                }`}
+                              >
+                                {/* Main cell content */}
+                                {isBlankRow &&
+                                (columnType === "derived" ||
+                                  columnType === "referenced" ||
+                                  columnType === "recurrent")
+                                  ? "--"
+                                  : (() => {
+                                      let displayValue = cell;
+                                      return (displayValue || (isBlankRow ? checkTodaysData() ? "Data complete" : "Click to enter today's data": "0"));
+                                    })()}
+                              </div>
+                              {hasSubrowsEnabled && !isBlankRow && (
+                                <span
+                                  className={`ml-2 cursor-pointer text-xs font-bold transition-transform duration-200 ${
+                                    isExpanded ? "text-blue-600 transform" : "text-gray-400 hover:text-blue-600"
                                   }`}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handleRowDoubleClick(rowIndex, cellIndex);
                                   }}
-                                  title={isExpanded ? "Click to collapse" : `Click to expand ${isClosingStock ? "product details" : "subrows"}`}
+                                  title={isExpanded ? "Click to collapse" : "Click to expand subrows"}
                                 >
                                   {isExpanded ? "▼" : "▶"}
                                 </span>
@@ -2859,97 +2422,31 @@ const SheetManagement = () => {
                         );
                       })}
                     </tr>
-
                     {/* Expanded subrows section */}
                     {currentSheet.attributes.map((attr, colIndex) => {
-                      if ((!isOpeningStockColumn(attr.name) && !isClosingStockColumn(attr.name)) || isBlankRow || !isRowExpanded(rowIndex, colIndex)) {
+                      if (!hasSubrows(attr) || isBlankRow || !isRowExpanded(rowIndex, colIndex)) {
                         return null;
                       }
 
-                      const subrows = isClosingStockColumn(attr.name) 
-                        ? getClosingSubrowsForRowAndColumn(rowIndex, attr.name)
-                        : getSubrowsForRowAndColumn(rowIndex, attr.name);
-                      
-                      const bgColor = isClosingStockColumn(attr.name) ? "bg-orange-50" : "bg-green-50";
-                      const borderColor = isClosingStockColumn(attr.name) ? "border-orange-200" : "border-green-200";
+                      const subrows = getSubrowsForRowAndColumn(rowIndex, colIndex);
                       
                       return (
-                        <tr key={`expanded-${rowIndex}-${colIndex}`} className={bgColor}>
+                        <tr key={`expanded-${rowIndex}-${colIndex}`} className="bg-blue-50">
                           <td colSpan={currentSheet.attributes.length} className="px-4 py-3">
-                            <div className={`bg-white rounded-lg border ${borderColor} p-4 shadow-sm`}>
+                            <div className="bg-white rounded-lg border border-blue-200 p-4 shadow-sm">
                               <div className="flex items-center justify-between mb-3">
                                 <h4 className="text-sm font-semibold text-gray-800">
-                                  {attr.name.replace(/-/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())} - {isClosingStockColumn(attr.name) ? "Product Details" : "Details"}
+                                  {attr.name.replace(/-/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())} - Subrows Details
                                 </h4>
                                 <button
                                   onClick={() => handleRowDoubleClick(rowIndex, colIndex)}
-                                  className="text-gray-400 hover:text-gray-600"
+                                  className="text-gray-400 hover:text-gray-600 transition-colors"
                                 >
                                   <X size={16} />
                                 </button>
                               </div>
                               
-                              {subrows && subrows.length > 0 ? (
-                                <div className="overflow-x-auto overflow-y-auto h-[10rem]">
-                                  <table className="min-w-full text-sm">
-                                    <thead>
-                                      <tr className="border-b border-gray-200">
-                                        {isClosingStockColumn(attr.name) ? (
-                                          <>
-                                            <th className="text-left py-2 px-3 font-medium text-gray-700">Description</th>
-                                            <th className="text-left py-2 px-3 font-medium text-gray-700">Note</th>
-                                            <th className="text-right py-2 px-3 font-medium text-gray-700">Value</th>
-                                          </>
-                                        ) : (
-                                          <>
-                                            <th className="text-left py-2 px-3 font-medium text-gray-700">Sr.No</th>
-                                            <th className="text-left py-2 px-3 font-medium text-gray-700">Department</th>
-                                            <th className="text-left py-2 px-3 font-medium text-gray-700">Note</th>
-                                            <th className="text-right py-2 px-3 font-medium text-gray-700">Value</th>
-                                          </>
-                                        )}
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {subrows.map((subrow, subIndex) => (
-                                        <tr key={subIndex} className="border-b border-gray-100 hover:bg-gray-50">
-                                          {isClosingStockColumn(attr.name) ? (
-                                            <>
-                                              <td className="py-2 px-3 text-gray-900">{subrow[0]}</td>
-                                              <td className="py-2 px-3 text-gray-700">{subrow[1] || "-"}</td>
-                                              <td className="py-2 px-3 text-right font-medium text-gray-900">
-                                                {typeof subrow[2] === 'number' ? subrow[2].toFixed(2) : subrow[2]}
-                                              </td>
-                                            </>
-                                          ) : (
-                                            <>
-                                              <td className="py-2 px-3 text-gray-900">{subrow[0]}</td>
-                                              <td className="py-2 px-3 text-gray-900">{subrow[1]}</td>
-                                              <td className="py-2 px-3 text-gray-700">{subrow[2] || "-"}</td>
-                                              <td className="py-2 px-3 text-right font-medium text-gray-900">
-                                                {typeof subrow[3] === 'number' ? subrow[3].toFixed(2) : subrow[3]}
-                                              </td>
-                                            </>
-                                          )}
-                                        </tr>
-                                      ))}
-                                      <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
-                                        <td colSpan={isClosingStockColumn(attr.name) ? "2" : "3"} className="py-2 px-2 text-right">Total:</td>
-                                        <td className="py-2 px-3 text-right">
-                                          {isClosingStockColumn(attr.name) 
-                                            ? subrows.reduce((total, subrow) => total + (parseFloat(subrow[2]) || 0), 0).toFixed(2)
-                                            : subrows.reduce((total, subrow) => total + (parseFloat(subrow[3]) || 0), 0).toFixed(2)
-                                          }
-                                        </td>
-                                      </tr>
-                                    </tbody>
-                                  </table>
-                                </div>
-                              ) : (
-                                <div className="text-center py-4 text-gray-500">
-                                  {isClosingStockColumn(attr.name) ? "No product details available for this entry" : "No subrows data available for this entry"}
-                                </div>
-                              )}
+                              {renderSubrowsTable(subrows, attr)}
                             </div>
                           </td>
                         </tr>
@@ -2958,7 +2455,7 @@ const SheetManagement = () => {
                   </React.Fragment>
                 );
               })}
-              
+
               {/* Totals row remains the same */}
               <tr className="bg-gray-100 font-semibold border-t-2 border-gray-300">
                 {totalsRow.map((total, cellIndex) => (
@@ -3049,33 +2546,64 @@ const SheetManagement = () => {
           <div className="grid grid-cols-4 gap-4">
             {currentSheet.attributes.map((attr, index) => {
               const columnType = getColumnType(attr);
-              const isClosingStockColumn = attr.name.toLowerCase().includes("closing") && attr.name.toLowerCase().includes("stock");
 
               const isRecurrentField = columnType === "recurrent";
               const isRecurrentDisabled =
                 isRecurrentField && attr.recurrentCheck?.recurrenceFedStatus;
 
-              const isDisabled = columnType === "derived" || columnType === "referenced" || isRecurrentDisabled;
+              const isDisabled =
+                columnType === "derived" ||
+                columnType === "referenced" ||
+                isRecurrentDisabled;
 
               const isDateField = attr.name.toLowerCase() === "date" || index === 0;
+              
+              // CRUCIAL FIX: For insert mode, date field should be disabled and show today's date
               const shouldDisableDateInInsert = modalType === "insert" && isDateField;
+              
+              // Final disabled state
               const finalDisabled = isDisabled || shouldDisableDateInInsert;
 
               let displayValue = modalData[attr.name] || "";
-  
-              if (isRecurrentField && !displayValue && modalType === "insert") {
+
+              // CRUCIAL FIX: Handle date field properly
+              if (isDateField) {
+                if (modalType === "insert") {
+                  // For insert mode, always show today's date in correct format
+                  displayValue = getTodaysDate();
+                } else {
+                  // For update mode, show the existing date
+                  displayValue = modalData[attr.name] || "";
+                }
+              } else if (isRecurrentField && !displayValue && modalType === "insert") {
                 if (attr.recurrentCheck?.recurrenceFedStatus) {
-                  // Auto-calculate from previous month or last record
                   displayValue = getRecurrentValueForDisplay(attr);
                 }
-              } else if (isRecurrentField && !displayValue && modalType === "update" && selectedRowIndex !== null) {
-                // For update mode, calculate recurrent value for the selected row
-                displayValue = calculateRecurrentValue(attr, index, selectedRowIndex);
+              } else if (
+                isRecurrentField &&
+                !displayValue &&
+                modalType === "update" &&
+                selectedRowIndex !== null
+              ) {
+                displayValue = calculateRecurrentValue(
+                  attr,
+                  index,
+                  selectedRowIndex
+                );
               }
 
-              // Determine input type based on field name
-              const isDepartmentField = attr.name.toLowerCase().includes("department");
-              const inputType = isDepartmentField ? "text" : "number";
+              // Handle subrows total calculation
+              if (shouldOpenSubrowsModal(attr) && subrowsData[attr.name] && subrowsData[attr.name].length > 0) {
+                const total = subrowsData[attr.name].reduce((sum, subrow) => {
+                  const aggregateField = attr.subrowsConfig.aggregateField;
+                  const value = parseFloat(subrow[aggregateField]) || 0;
+                  return sum + value;
+                }, 0);
+                displayValue = total.toString();
+              }
+              
+              // CRUCIAL FIX: Input type should be text for date field, number for others
+              const inputType = isDateField ? "text" : "number";
 
               return (
                 <div key={index} className="space-y-1">
@@ -3086,96 +2614,78 @@ const SheetManagement = () => {
                     {columnType === "derived" && " ⭐"}
                     {columnType === "referenced" && " 🔗"}
                     {columnType === "recurrent" && " 🔄"}
-                    {isOpeningStockColumn(attr.name) && " 📦"}
-                    {isClosingStockColumn && " 📋"}
                     {shouldDisableDateInInsert && " 📅"}
-                    {isDepartmentField && " 📝"} {/* Add text indicator */}
-                    {!isDepartmentField &&
-                      !isDateField &&
-                      !isDisabled &&
-                      !isOpeningStockColumn(attr.name) &&
-                      " 🔢"}{" "}
-                    {/* Add number indicator */}
+                    {!isDateField && !isDisabled && " 🔢"}
                   </label>
                   <div className="relative">
-                    <input
-                      type={finalDisabled || isDateField ? "text" : inputType}
-                      value={displayValue || ""}
-                      onChange={(e) => {
-                        if (!finalDisabled) {
-                          handleInputChange(attr.name, e.target.value);
+                    <div className="flex items-center relative">
+                      <input
+                        type={inputType}
+                        value={displayValue || ""}
+                        onChange={(e) => {
+                          if (!finalDisabled) {
+                            handleInputChange(attr.name, e.target.value);
+                          }
+                        }}
+                        disabled={finalDisabled}
+                        placeholder={
+                          isDateField
+                            ? shouldDisableDateInInsert 
+                              ? "Today's date (auto-filled)"
+                              : "Select Date"
+                            : isRecurrentField && isRecurrentDisabled
+                            ? "Auto-calculated from previous period"
+                            : isRecurrentField && !isRecurrentDisabled
+                            ? "Enter value or auto-fill from previous period"
+                            : columnType === "derived"
+                            ? "Auto-calculated"
+                            : columnType === "referenced"
+                            ? "Referenced from another sheet"
+                            : "Enter number"
                         }
-                      }}
-                      onClick={() => {
-                        if (isOpeningStockColumn(attr.name) && !finalDisabled) {
-                          handleOpeningStockClick(attr.name);
-                        }else if (isClosingStockColumn && !finalDisabled) {
-                          handleClosingStockClick(attr.name);
-                        }
-                      }}
-                      readOnly={(isOpeningStockColumn(attr.name) || isClosingStockColumn) && !finalDisabled}
-                      disabled={finalDisabled}
-                      placeholder={
-                        isOpeningStockColumn(attr.name)? "Click to enter stock details" :
-                        isClosingStockColumn ? "Click to enter product details" :
-                        isDateField
-                          ? modalType === "insert"
-                            ? "Today's date (auto-filled)"
-                            : `${attr.name}`
-                          : isRecurrentField && isRecurrentDisabled
-                          ? "Auto-calculated from previous period"
-                          : isRecurrentField && !isRecurrentDisabled
-                          ? "Enter value or auto-fill from previous period"
-                          : columnType === "derived"
-                          ? "Auto-calculated"
-                          : columnType === "referenced"
-                          ? "Referenced from another sheet"
-                          : isDepartmentField
-                          ? "Enter text (letters only)"
-                          : "Enter number"
-                      }
-                      // Add step and min attributes for number inputs
-                      {...(!isDepartmentField &&
-                        !isDateField &&
-                        !finalDisabled && {
+                        {...(!isDateField && !finalDisabled && {
                           step: "any",
-                          min: undefined, // Allow negative numbers
+                          min: undefined,
                         })}
-                      className={`w-full px-3 py-2 border border-gray-300 rounded-md text-sm ${
-                        isOpeningStockColumn(attr.name) && !finalDisabled ? "bg-green-50 border-green-300 cursor-pointer" :
-                        isClosingStockColumn && !finalDisabled ? "bg-orange-50 border-orange-300 cursor-pointer" :
-                        columnType === "derived"
-                          ? "bg-yellow-50 border-yellow-300"
-                          : columnType === "referenced"
-                          ? "bg-blue-50 border-blue-300 opacity-60"
-                          : isRecurrentField && !isRecurrentDisabled
-                          ? "bg-purple-50 border-purple-300 opacity-60"
-                          : shouldDisableDateInInsert
-                          ? "bg-gray-50 border-gray-300"
-                          : isDepartmentField
-                          ? "bg-green-50 border-green-300"
-                          : "bg-blue-50 border-blue-300"
-                      } ${
-                        finalDisabled ? "cursor-not-allowed opacity-75" : ""
-                      } ${isRecurrentField ? "pr-10" : ""}`}
-                    />
-                    {isRecurrentField && (
-                      <button
-                        type="button"
-                        onClick={(e) => handleAddOnClick(attr.name, e)}
-                        className="absolute right-2 top-1/3 transform -translate-y-1/2 w-6 h-6 bg-purple-600 text-white rounded-full text-xs font-bold hover:bg-purple-700 transition-colors flex items-center justify-center"
-                        title="Add value to recurrent amount"
-                      >
-                        +
-                      </button>
-                    )}
+                        className={`flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm ${
+                          columnType === "derived"
+                            ? "bg-yellow-50 border-yellow-300"
+                            : columnType === "referenced"
+                            ? "bg-blue-50 border-blue-300 opacity-60"
+                            : isRecurrentField && !isRecurrentDisabled
+                            ? "bg-purple-50 border-purple-300 opacity-60"
+                            : shouldDisableDateInInsert
+                            ? "bg-gray-50 border-gray-300"
+                            : "bg-blue-50 border-blue-300"
+                        } ${
+                          finalDisabled ? "cursor-not-allowed opacity-75" : ""
+                        }`}
+                      />
+                      
+                      {/* Add the subrows button here */}
+                      {renderSubrowsButton(attr.name)}
+                      
+                      {/* Add-on button for recurrent fields */}
+                      {isRecurrentField && (
+                        <button
+                          type="button"
+                          onClick={(e) => handleAddOnClick(attr.name, e)}
+                          className="ml-2 w-6 h-6 bg-purple-600 text-white rounded-full text-xs font-bold hover:bg-purple-700 transition-colors flex items-center justify-center"
+                          title="Add value to recurrent amount"
+                        >
+                          +
+                        </button>
+                      )}
+                    </div>
+                    
+                    {/* Help text */}
                     {columnType === "derived" && attr.humanFormula && (
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-gray-500 mt-1">
                         Formula: {attr.humanFormula}
                       </div>
                     )}
                     {columnType === "recurrent" && (
-                      <div className="text-xs text-purple-600">
+                      <div className="text-xs text-purple-600 mt-1">
                         Value from previous period of:{" "}
                         {currentSheet.attributes[
                           attr.recurrentCheck?.recurrentReferenceIndice
@@ -3185,14 +2695,26 @@ const SheetManagement = () => {
                           "Unknown"}
                       </div>
                     )}
-                    {isDepartmentField && (
-                      <div className="text-xs text-green-600">
-                        Text field - Only letters, spaces, and basic punctuation
-                        allowed
+                    {isDateField && shouldDisableDateInInsert && (
+                      <div className="text-xs text-gray-600 mt-1">
+                        Today's date - automatically filled for new entries
                       </div>
                     )}
-                    {!isDepartmentField && !isDateField && !isDisabled && (
-                      <div className="text-xs text-blue-600">
+                    {isDateField && !shouldDisableDateInInsert && (
+                      <div className="text-xs text-blue-600 mt-1">
+                        You can modify this date if needed
+                      </div>
+                    )}
+                    {shouldOpenSubrowsModal(attr) && (
+                      <div className="text-xs text-blue-600 mt-1">
+                        {subrowsData[attr.name] && subrowsData[attr.name].length > 0
+                          ? `Subrows: ${subrowsData[attr.name].length} entries, Total: ${displayValue}`
+                          : "Click 'Details' button to add subrows"
+                        }
+                      </div>
+                    )}
+                    {!isDateField && !isDisabled && !shouldOpenSubrowsModal(attr) && (
+                      <div className="text-xs text-blue-600 mt-1">
                         Number field - Only numeric values allowed
                       </div>
                     )}
@@ -3220,47 +2742,61 @@ const SheetManagement = () => {
       </div>
     );
   };
-  
+
   const getRecurrentValueForDisplay = (attribute) => {
     if (!attribute.recurrentCheck?.isRecurrent) {
       return "0";
     }
 
-    const referenceColumnIndex = attribute.recurrentCheck.recurrentReferenceIndice;
-    
+    const referenceColumnIndex =
+      attribute.recurrentCheck.recurrentReferenceIndice;
+
     // First try to get from previous month record
-    if (previousMonthRecord && previousMonthRecord.attributes && referenceColumnIndex !== null) {
+    if (
+      previousMonthRecord &&
+      previousMonthRecord.attributes &&
+      referenceColumnIndex !== null
+    ) {
       const value = previousMonthRecord.attributes[referenceColumnIndex];
       if (value !== undefined && value !== "") {
         console.log(`Using previous month value for ${attribute.name}:`, value);
         return value.toString();
       }
     }
-    
+
     // If no previous month record, try to get from current sheet's last record
     const currentSheetData = rawSheetsData[selectedSheetId] || [];
     if (currentSheetData.length > 0 && referenceColumnIndex !== null) {
       const lastRecord = currentSheetData[currentSheetData.length - 1];
-      if (lastRecord && lastRecord.attributes && lastRecord.attributes[referenceColumnIndex] !== undefined) {
+      if (
+        lastRecord &&
+        lastRecord.attributes &&
+        lastRecord.attributes[referenceColumnIndex] !== undefined
+      ) {
         const value = lastRecord.attributes[referenceColumnIndex];
         console.log(`Using last record value for ${attribute.name}:`, value);
         return value.toString();
       }
     }
-    
+
     // If no data available, try to get from processed sheet data
     if (currentSheet && currentSheet.attributes[referenceColumnIndex]) {
       const refColumn = currentSheet.attributes[referenceColumnIndex];
       if (refColumn.data && refColumn.data.length > 0) {
         const lastValue = refColumn.data[refColumn.data.length - 1];
         if (lastValue !== undefined && lastValue !== "") {
-          console.log(`Using processed sheet last value for ${attribute.name}:`, lastValue);
+          console.log(
+            `Using processed sheet last value for ${attribute.name}:`,
+            lastValue
+          );
           return lastValue.toString();
         }
       }
     }
-    
-    console.log(`No recurrent value found for ${attribute.name}, defaulting to 0`);
+
+    console.log(
+      `No recurrent value found for ${attribute.name}, defaulting to 0`
+    );
     return "0";
   };
 
@@ -3364,22 +2900,31 @@ const SheetManagement = () => {
   };
 
   const getRecurrentValueFromPreviousMonth = (attribute, sheetData) => {
-  if (!attribute.recurrentCheck?.isRecurrent) {
-    return "0";
-  }
-
-  // Use the stored previous month record
-  if (previousMonthRecord && previousMonthRecord.attributes) {
-    const referenceColumnIndex = attribute.recurrentCheck.recurrentReferenceIndice;
-    if (referenceColumnIndex !== null && previousMonthRecord.attributes[referenceColumnIndex] !== undefined) {
-      console.log(`Getting recurrent value for ${attribute.name} from previous month:`, previousMonthRecord.attributes[referenceColumnIndex]);
-      return previousMonthRecord.attributes[referenceColumnIndex] || "0";
+    if (!attribute.recurrentCheck?.isRecurrent) {
+      return "0";
     }
-  }
-  
-  console.log(`No previous month record found for recurrent column: ${attribute.name}`);
-  return "0";
-};
+
+    // Use the stored previous month record
+    if (previousMonthRecord && previousMonthRecord.attributes) {
+      const referenceColumnIndex =
+        attribute.recurrentCheck.recurrentReferenceIndice;
+      if (
+        referenceColumnIndex !== null &&
+        previousMonthRecord.attributes[referenceColumnIndex] !== undefined
+      ) {
+        console.log(
+          `Getting recurrent value for ${attribute.name} from previous month:`,
+          previousMonthRecord.attributes[referenceColumnIndex]
+        );
+        return previousMonthRecord.attributes[referenceColumnIndex] || "0";
+      }
+    }
+
+    console.log(
+      `No previous month record found for recurrent column: ${attribute.name}`
+    );
+    return "0";
+  };
 
   const handleAddOnClick = (fieldName, event) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -3418,167 +2963,208 @@ const SheetManagement = () => {
     setAddOnValue("");
   };
 
-  const isOpeningStockColumn = (columnName) => {
-    return columnName.toLowerCase().includes("opening") && columnName.toLowerCase().includes("stock");
+  const hasSubrows = (attr) => {
+    return attr.hasSubrows && attr.subrowsConfig && attr.subrowsConfig.subrowsEnabled;
   };
 
-
-  const handleOpeningStockClick = (fieldName) => {
-    setCurrentSubrowsColumn(fieldName);
-    // Get existing subrows if any
-    if (modalType === "insert") {
-    const existingSubrows = subrowsData[fieldName] || [];
-    // subrowsData will be used by the modal
-  }
-    setShowSubrowsModal(true);
+  const getSubrowsForRowAndColumn = (rowIndex, columnIndex) => {
+    // Get the sheet data for the current row
+    const sheetData = rawSheetsData[selectedSheetId] || [];
+    if (!sheetData[rowIndex] || !sheetData[rowIndex].subrows) {
+      return [];
+    }
+    
+    // Get subrows for the specific column index
+    const columnSubrows = sheetData[rowIndex].subrows[columnIndex.toString()] || [];
+    return columnSubrows;
   };
 
-  const handleSubrowsSave = (data) => {
-  const { subrows, total } = data;
-  
-  // For update mode, we need to store the subrows in the format expected by the API
-  if (modalType === "update") {
-    // Store subrows in API format directly for update operations
-    setSubrowsData(prev => ({
-      ...prev,
-      [currentSubrowsColumn]: subrows // subrows is already in API format from SubRows.jsx
-    }));
-  } else {
-    // For insert mode, store as before
-    setSubrowsData(prev => ({
-      ...prev,
-      [currentSubrowsColumn]: subrows
-    }));
-  }
-  
-  // Update modal data with the total
-  setModalData(prev => ({
-    ...prev,
-    [currentSubrowsColumn]: total.toString()
-  }));
-  
-  setShowSubrowsModal(false);
-  setCurrentSubrowsColumn("");
-};
-
-  const handleSubrowsClose = () => {
-    setShowSubrowsModal(false);
-    setCurrentSubrowsColumn("");
+  const isRowExpanded = (rowIndex, columnIndex) => {
+    return expandedRows.has(`${rowIndex}-${columnIndex}`);
   };
 
   const handleRowDoubleClick = (rowIndex, columnIndex) => {
-  const attr = currentSheet.attributes[columnIndex];
-  
-  // Handle double clicks on both opening and closing stock columns
-  if (!isOpeningStockColumn(attr.name) && !isClosingStockColumn(attr.name)) {
-    return;
-  }
-  
-  const rowKey = `${rowIndex}-${columnIndex}`;
-  const newExpandedRows = new Set(expandedRows);
-  
-  if (newExpandedRows.has(rowKey)) {
-    newExpandedRows.delete(rowKey);
-  } else {
-    newExpandedRows.add(rowKey);
-  }
-  
-  setExpandedRows(newExpandedRows);
-};
-
-const isRowExpanded = (rowIndex, columnIndex) => {
-  return expandedRows.has(`${rowIndex}-${columnIndex}`);
-};
-
-const getSubrowsForRowAndColumn = (rowIndex, columnName) => {
-  // Get subrows for this specific row
-  const rowSubrows = apiSubrowsData[rowIndex] || [];
-  return rowSubrows;
-};
-
-const isClosingStockColumn = (columnName) => {
-  return columnName.toLowerCase().includes("closing") && columnName.toLowerCase().includes("stock");
-};
-
-const handleClosingStockClick = (fieldName) => {
-  setCurrentSubrowsClosingColumn(fieldName);
-  setShowSubrowsClosingModal(true);
-};
-const handleSubrowsClosingSave = (data) => {
-  const { subrows, total } = data;
-  
-  if (modalType === "update") {
-    setSubrowsClosingData(prev => ({
-      ...prev,
-      [currentSubrowsClosingColumn]: subrows
-    }));
-  } else {
-    setSubrowsClosingData(prev => ({
-      ...prev,
-      [currentSubrowsClosingColumn]: subrows
-    }));
-  }
-  
-  setModalData(prev => ({
-    ...prev,
-    [currentSubrowsClosingColumn]: total.toString()
-  }));
-  
-  setShowSubrowsClosingModal(false);
-  setCurrentSubrowsClosingColumn("");
-};
-
-const handleSubrowsClosingClose = () => {
-  setShowSubrowsClosingModal(false);
-  setCurrentSubrowsClosingColumn("");
-};
-
-const getClosingSubrowsForRowAndColumn = (rowIndex, columnName) => {
-  const rowSubrows = apiSubrowsClosingData[rowIndex] || [];
-  return rowSubrows;
-};
-  const fetchSubrowsForRow = async (sheetId, rowIndex) => {
-    try {
-      // You'll need to create this API call to fetch subrows for a specific row
-      // For now, I'll assume you have this function in your repository
-      const subrowsResponse = await getSubrowsForRow(sheetId, rowIndex);
-      
-      if (subrowsResponse && subrowsResponse.length > 0) {
-        // Convert subrows back to the format expected by the modal
-        const convertedSubrows = subrowsResponse.map(subrow => ({
-          srNo: subrow[0],
-          department: subrow[1],
-          note: subrow[2],
-          value: subrow[3]
-        }));
-        
-        // Find which column this subrows belong to (assuming opening stock for now)
-        const openingStockColumn = currentSheet.attributes.find(attr => 
-          isOpeningStockColumn(attr.name)
-        );
-        
-        if (openingStockColumn) {
-          setSubrowsData(prev => ({
-            ...prev,
-            [openingStockColumn.name]: subrowsResponse // Store in original format
-          }));
-          
-          setOriginalSubrowsData(prev => ({
-            ...prev,
-            [openingStockColumn.name]: subrowsResponse // Store original for comparison
-          }));
-        }
-      } else {
-        // Clear subrows data if no subrows found
-        setSubrowsData({});
-        setOriginalSubrowsData({});
-      }
-    } catch (error) {
-      console.error("Error fetching subrows:", error);
-      setSubrowsData({});
-      setOriginalSubrowsData({});
+    const attr = currentSheet.attributes[columnIndex];
+    
+    // Only handle clicks on columns that have subrows
+    if (!hasSubrows(attr)) {
+      return;
     }
-};
+    
+    const rowKey = `${rowIndex}-${columnIndex}`;
+    const newExpandedRows = new Set(expandedRows);
+    
+    if (newExpandedRows.has(rowKey)) {
+      newExpandedRows.delete(rowKey);
+    } else {
+      newExpandedRows.add(rowKey);
+    }
+    
+    setExpandedRows(newExpandedRows);
+  };
+
+  const renderSubrowsTable = (subrows, attr) => {
+    if (!subrows || subrows.length === 0) {
+      return (
+        <div className="text-center py-4 text-gray-500">
+          No subrows data available for this entry
+        </div>
+      );
+    }
+
+    // Get column configuration from metadata
+    const subrowColumns = attr.subrowsConfig.subrowColumns || [];
+    
+    return (
+      <div className="overflow-x-auto overflow-y-auto max-h-64">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-200">
+              {subrowColumns.map((column, index) => (
+                <th key={index} className={`text-left py-2 px-3 font-medium text-gray-700 ${
+                  column.type === 'number' ? 'text-left' : 'text-left'
+                }`}>
+                  {column.name.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {subrows.map((subrow, subIndex) => (
+              <tr key={subrow._id || subIndex} className="border-b border-gray-100 hover:bg-gray-50">
+                {subrowColumns.map((column, colIndex) => (
+                  <td key={colIndex} className={`py-2 px-3 ${
+                    column.type === 'number' 
+                      ? 'text-left font-medium text-gray-900' 
+                      : 'text-left text-gray-900'
+                  }`}>
+                    {column.type === 'number' && typeof subrow[column.name] === 'number'
+                      ? subrow[column.name].toFixed(2)
+                      : subrow[column.name] || '-'
+                    }
+                  </td>
+                ))}
+              </tr>
+            ))}
+            {/* Total row for aggregate fields */}
+            {attr.subrowsConfig.aggregateField && (
+              <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
+                <td colSpan={subrowColumns.length - 1} className="py-2 px-3 text-right">
+                  Total:
+                </td>
+                <td className="py-2 px-3 text-left">
+                  {subrows.reduce((total, subrow) => {
+                    const value = parseFloat(subrow[attr.subrowsConfig.aggregateField]) || 0;
+                    return total + value;
+                  }, 0).toFixed(2)}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const shouldOpenSubrowsModal = (attr) => {
+    return attr.hasSubrows && 
+          attr.subrowsConfig && 
+          attr.subrowsConfig.subrowsEnabled && 
+          attr.subrowsConfig.subrowColumns && 
+          attr.subrowsConfig.subrowColumns.length > 0;
+  };
+
+  const getExistingSubrowsData = (columnName, rowIndex = null) => {
+    // For insert mode
+    if (modalType === "insert") {
+      return subrowsData[columnName] || [];
+    }
+    
+    // For update mode - get from API data
+    if (modalType === "update" && rowIndex !== null) {
+      const sheetData = rawSheetsData[selectedSheetId] || [];
+      if (sheetData[rowIndex] && sheetData[rowIndex].subrows) {
+        const columnIndex = currentSheet.attributes.findIndex(attr => attr.name === columnName);
+        return sheetData[rowIndex].subrows[columnIndex.toString()] || [];
+      }
+    }
+    
+    return [];
+  };
+
+  const handleSubrowsSave = (data) => {
+    const { subrows, total } = data;
+    const columnName = currentSubrowsColumn.name;
+    
+    console.log("Saving subrows for column:", columnName, "Data:", subrows);
+    
+    // Store subrows data locally - this should contain ALL subrows (existing + new)
+    setSubrowsData(prev => ({
+      ...prev,
+      [columnName]: subrows // This should be the complete array from the modal
+    }));
+    
+    // Update modal data with the calculated total
+    setModalData(prev => ({
+      ...prev,
+      [columnName]: total.toString()
+    }));
+    
+    // Close modal and let user continue with other fields
+    setShowSubrowsModal(false);
+    setCurrentSubrowsColumn(null);
+  };
+
+  const handleSubrowsClose = () => {
+    setShowSubrowsModal(false);
+    setCurrentSubrowsColumn(null);
+  };
+
+  const renderSubrowsButton = (fieldName) => {
+    const attr = currentSheet.attributes.find(a => a.name === fieldName);
+    
+    if (!shouldOpenSubrowsModal(attr)) {
+      return null;
+    }
+    
+    const hasExistingSubrows = getExistingSubrowsData(fieldName, selectedRowIndex).length > 0;
+    const hasModifiedSubrows = subrowsData[fieldName] && subrowsData[fieldName].length > 0;
+    const hasSubrowsData = hasExistingSubrows || hasModifiedSubrows;
+    
+    // Show different states based on data availability
+    let buttonText = '+ Add';
+    let buttonClass = 'text-blue-700 border border-blue-300 hover:bg-blue-200/30';
+    
+    if (hasModifiedSubrows) {
+      buttonText = '✓ Modified';
+      buttonClass = 'text-yellow-700 border border-yellow-300 hover:bg-yellow-200/30';
+    } else if (hasExistingSubrows) {
+      buttonText = '✓ Saved';
+      buttonClass = 'text-green-700 border border-green-300 hover:bg-green-200/30';
+    }
+    
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setCurrentSubrowsColumn(attr);
+          setShowSubrowsModal(true);
+        }}
+        className={`absolute px-2 text-xs rounded transition-colors w-full h-full ${buttonClass}`}
+        title={
+          hasModifiedSubrows 
+            ? 'Subrows modified - click to edit' 
+            : hasExistingSubrows 
+            ? 'Subrows exist - click to view/edit'
+            : 'Click to add subrows details'
+        }
+      >
+        <div className="flex items-end justify-end h-full">
+          {buttonText}
+        </div>
+      </button>
+    );
+  };
 
   // Show loading state while metadata is being fetched
   if (metadataLoading) {
@@ -3838,32 +3424,6 @@ const getClosingSubrowsForRowAndColumn = (rowIndex, columnName) => {
 
       {renderAddOnModal()}
 
-      <SubRows
-        isOpen={showSubrowsModal}
-        onClose={handleSubrowsClose}
-        onSave={handleSubrowsSave}
-        columnName={currentSubrowsColumn}
-        initialSubrows={
-          modalType === "update" && selectedRowIndex !== null
-            ? (apiSubrowsData[selectedRowIndex] || [])
-            : []
-        }
-        currentTotal={parseFloat(modalData[currentSubrowsColumn]) || 0}
-      />
-
-      <SubRowsClosing
-        isOpen={showSubrowsClosingModal}
-        onClose={handleSubrowsClosingClose}
-        onSave={handleSubrowsClosingSave}
-        columnName={currentSubrowsClosingColumn}
-        initialSubrows={
-          modalType === "update" && selectedRowIndex !== null
-            ? (apiSubrowsClosingData[selectedRowIndex] || [])
-            : []
-        }
-        currentTotal={parseFloat(modalData[currentSubrowsClosingColumn]) || 0}
-      />
-
       <ColumnCreationForm
         isOpen={showColumnModal}
         onClose={() => {
@@ -3891,6 +3451,9 @@ const getClosingSubrowsForRowAndColumn = (rowIndex, columnName) => {
           )}
           currentSheetId={selectedSheetId} // Make sure this is included
           existingData={{
+            hasSubrows: currentSheet?.attributes[selectedColumnIndex],
+            subrowsConfig: currentSheet?.attributes[selectedColumnIndex]?.hasSubrows ? currentSheet?.attributes[selectedColumnIndex]?.subrowsConfig : null,
+
             name: currentSheet?.attributes[selectedColumnIndex]?.name || "",
             additionIndices:
               currentSheet?.attributes[selectedColumnIndex]?.formula
@@ -3917,10 +3480,25 @@ const getClosingSubrowsForRowAndColumn = (rowIndex, columnName) => {
                       ?.recurrentCheck?.recurrentReferenceIndice,
                 }
               : null,
+
+            
             isDerived:
               currentSheet?.attributes[selectedColumnIndex]?.derived || false,
             currentColumnIndex: selectedColumnIndex,
+
+            
           }}
+        />
+      )}
+
+      {showSubrowsModal && currentSubrowsColumn && (
+        <DynamicSubRows
+          isOpen={showSubrowsModal}
+          onClose={handleSubrowsClose}
+          onSave={handleSubrowsSave}
+          columnConfig={currentSubrowsColumn}
+          initialSubrows={getExistingSubrowsData(currentSubrowsColumn.name, selectedRowIndex)}
+          currentTotal={parseFloat(modalData[currentSubrowsColumn.name]) || 0}
         />
       )}
 
