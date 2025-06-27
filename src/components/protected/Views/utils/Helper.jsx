@@ -734,7 +734,7 @@ export const ColumnCreationForm = ({
                     </div>
                   )}
 
-                  <div className="flex flex-col gap-2 max-h-[5rem] overflow-y-auto">
+                  <div className="flex flex-col gap-2 max-h-[10rem] overflow-y-auto">
                     {subrowColumns.map((column) => (
                       <div
                         key={column.id}
